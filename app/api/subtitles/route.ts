@@ -1,0 +1,3 @@
+import {NextResponse} from 'next/server';
+export async function POST(req:Request){const b=await req.json();if(!Array.isArray(b.segments))return NextResponse.json({error:'SEGMENTS_REQUIRED'},{status:400});const vtt=['WEBVTT','',...b.segments.map((s:{start:number;end:number;text:string})=>`${time(s.start)} --> ${time(s.end)}\n${s.text}\n`)].join('\n');return new NextResponse(vtt,{headers:{'Content-Type':'text/vtt; charset=utf-8','Content-Disposition':'attachment; filename="captions.vtt"'}})}
+function time(n:number){const h=Math.floor(n/3600).toString().padStart(2,'0');const m=Math.floor(n%3600/60).toString().padStart(2,'0');const s=(n%60).toFixed(3).padStart(6,'0');return `${h}:${m}:${s}`}
