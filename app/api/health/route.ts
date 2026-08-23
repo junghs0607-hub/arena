@@ -1,0 +1,1 @@
+import {NextResponse} from 'next/server';export async function GET(){return NextResponse.json({ok:true,service:'clipforge-api',time:new Date().toISOString(),features:{mockAI:true,ffmpeg:true,database:Boolean(process.env.DATABASE_URL),youtube:Boolean(process.env.YOUTUBE_CLIENT_ID)}})}

@@ -1,0 +1,1 @@
+import {NextResponse} from 'next/server';export async function GET(req:Request){const code=new URL(req.url).searchParams.get('code');if(!code)return NextResponse.json({error:'OAUTH_CODE_REQUIRED'},{status:400});return NextResponse.json({ok:false,message:'OAuth callback received. Token exchange must be completed with an authenticated user context.'},{status:501})}

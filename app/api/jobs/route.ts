@@ -1,0 +1,2 @@
+import {NextResponse} from 'next/server';import {automationJobs} from '../../../drizzle/schema';import {db} from '../../../lib/db';import {desc,eq} from 'drizzle-orm';
+export async function GET(req:Request){const projectId=new URL(req.url).searchParams.get('projectId');try{return NextResponse.json(await db.select().from(automationJobs).where(projectId?eq(automationJobs.projectId,projectId):undefined).orderBy(desc(automationJobs.createdAt)))}catch{return NextResponse.json({error:'DATABASE_UNAVAILABLE'},{status:503})}}
