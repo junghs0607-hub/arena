@@ -1,0 +1,62 @@
+services:
+  flask:
+    build: .
+    ports:
+      - "5000:5000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://arena:arena@postgres:5432/arena
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: arena
+      POSTGRES_PASSWORD: arena
+      POSTGRES_DB: arena
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+
+  celery:
+    build: .
+    command: celery -A workers.celery_app.celery worker -l info
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://arena:arena@postgres:5432/arena
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      - redis
+      - postgres
+
+  celery-beat:
+    build: .
+    command: celery -A workers.celery_app.celery beat -l info
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://arena:arena@postgres:5432/arena
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+      - postgres
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - flask
+
+volumes:
+  pgdata:

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h3">업로드</h1>
+<table class="table table-dark">
+  <thead><tr><th>ID</th><th>제목</th><th>공개</th><th>상태</th><th>예약</th></tr></thead>
+  <tbody>
+  {% for u in items %}
+    <tr>
+      <td>{{ u.id }}</td>
+      <td>{{ u.title }}</td>
+      <td>{{ u.privacy }}</td>
+      <td>{{ u.status }}</td>
+      <td>{{ u.scheduled_at }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5">업로드 없음</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-2">{{ p.title }}</h1>
+<p class="text-secondary">상태 <span class="badge text-bg-danger">{{ p.status }}</span> · {{ p.format_type }} · {{ p.target_duration }}초
+{% if p.error_message %}<span class="text-warning"> · {{ p.error_message }}</span>{% endif %}</p>
+
+<div class="btn-group mb-4 flex-wrap">
+  {% for step, label in [('analyze','분석'),('transcribe','STT'),('script','대본'),('voice','TTS'),('subtitle','자막'),('render','렌더'),('thumbnail','썸네일'),('metadata','메타'),('quality','검수'),('full','전체 파이프라인')] %}
+  <form method="post" action="{{ url_for('projects.run_step', pid=p.id, step=step) }}" class="me-1 mb-1">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm btn-outline-light">{{ label }}</button>
+  </form>
+  {% endfor %}
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card bg-black border-secondary mb-3">
+      <div class="card-header">Source Video</div>
+      <div class="card-body small">
+        {{ p.source.title }}<br>
+        {{ p.source.file_path or p.source.origin_url }}<br>
+        권리확인: {{ p.source.rights_confirmed }}
+      </div>
+    </div>
+    <div class="card bg-black border-secondary mb-3">
+      <div class="card-header">AI Analysis</div>
+      <div class="card-body"><pre class="text-light small">{{ p.analysis_json or '아직 없음' }}</pre>
+        <ul>{% for sc in scenes %}<li>{{ sc.label }} ({{ sc.start_sec }}–{{ sc.end_sec }}s)</li>{% endfor %}</ul>
+      </div>
+    </div>
+    <div class="card bg-black border-secondary mb-3">
+      <div class="card-header">Generated Script</div>
+      <div class="card-body">
+        {% if script %}
+        <form method="post" action="{{ url_for('projects.edit_script', pid=p.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <textarea class="form-control bg-dark text-light" name="body" rows="10">{{ script.body }}</textarea>
+          <button class="btn btn-sm btn-danger mt-2">대본 저장</button>
+        </form>
+        {% else %}<p class="text-secondary">대본 없음</p>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card bg-black border-secondary mb-3">
+      <div class="card-header">Voice / Subtitle / Preview</div>
+      <div class="card-body">
+        {% if voice %}<audio controls src="{{ url_for('projects.media', pid=p.id, kind='voice') }}"></audio>{% endif %}
+        {% if subtitle %}<pre class="small text-info mt-2">{{ subtitle.content[:800] }}</pre>{% endif %}
+        {% if render %}
+          <video class="w-100 mt-2" controls src="{{ url_for('projects.media', pid=p.id, kind='render') }}"></video>
+          <div class="progress mt-2"><div class="progress-bar bg-danger" style="width: {{ render.progress }}%">{{ render.progress }}%</div></div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="card bg-black border-secondary mb-3">
+      <div class="card-header">Thumbnail</div>
+      <div class="card-body">
+        {% if thumb %}<img class="img-fluid" src="{{ url_for('projects.media', pid=p.id, kind='thumb') }}" alt="thumb">{% endif %}
+      </div>
+    </div>
+    <div class="card bg-black border-secondary mb-3">
+      <div class="card-header">YouTube Metadata / Upload</div>
+      <div class="card-body">
+        {% if meta %}
+          <p><strong>{{ meta.title }}</strong> (클릭 점수 {{ meta.click_score }})</p>
+          <pre class="small">{{ meta.description }}</pre>
+          <p>{{ meta.hashtags }} · {{ meta.tags }}</p>
+        {% endif %}
+        <form method="post" action="{{ url_for('youtube.do_upload', pid=p.id) }}" class="row g-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="col-md-4">
+            <select class="form-select form-select-sm" name="privacy">
+              <option>PRIVATE</option><option>UNLISTED</option><option>PUBLIC</option><option>SCHEDULED</option>
+            </select>
+          </div>
+          <div class="col-md-5">
+            <input class="form-control form-control-sm" type="datetime-local" name="scheduled_at">
+          </div>
+          <div class="col-md-3"><button class="btn btn-sm btn-danger">업로드</button></div>
+        </form>
+      </div>
+    </div>
+    <div class="card bg-black border-secondary">
+      <div class="card-header">작업 로그</div>
+      <div class="card-body small">
+        {% for j in jobs %}
+          <div>{{ j.id }} {{ j.task }} {{ j.status }} {{ j.error_message or '' }} (retry {{ j.retry_count }})</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

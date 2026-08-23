@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h3 mb-3">설정</h1>
+<div class="row">
+  <div class="col-md-6">
+    <form method="post" class="mb-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="mb-3">
+        <label class="form-label">자동화 모드</label>
+        <select class="form-select" name="automation_mode">
+          <option value="semi" {% if settings.get('automation_mode')=='semi' %}selected{% endif %}>반자동</option>
+          <option value="auto" {% if settings.get('automation_mode')=='auto' %}selected{% endif %}>완전 자동</option>
+          <option value="manual" {% if settings.get('automation_mode')=='manual' %}selected{% endif %}>수동</option>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">기본 언어</label>
+        <input class="form-control" name="default_language" value="{{ settings.get('default_language','ko') }}">
+      </div>
+      <button class="btn btn-danger">저장</button>
+    </form>
+    <h2 class="h5">런타임 (환경변수)</h2>
+    <ul class="small">
+      <li>LLM_PROVIDER = {{ cfg.LLM_PROVIDER }}</li>
+      <li>LLM_MODEL = {{ cfg.LLM_MODEL }}</li>
+      <li>TTS_PROVIDER = {{ cfg.TTS_PROVIDER }}</li>
+      <li>STT_PROVIDER = {{ cfg.STT_PROVIDER }}</li>
+      <li>DATABASE = {{ cfg.SQLALCHEMY_DATABASE_URI.split('@')[-1] }}</li>
+    </ul>
+    <p class="small text-secondary">API 키는 화면에 표시하지 않습니다.</p>
+  </div>
+  <div class="col-md-6">
+    <h2 class="h5">AI Providers</h2>
+    <ul>
+      {% for p in providers %}
+        <li>{{ p.kind }} / {{ p.name }} / {{ p.model }} {% if p.is_default %}(default){% endif %}</li>
+      {% endfor %}
+    </ul>
+    <h2 class="h5">최근 Job</h2>
+    <ul class="small">
+      {% for j in jobs %}
+        <li>#{{ j.id }} {{ j.task }} {{ j.status }} {{ j.error_message or '' }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}

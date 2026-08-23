@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h3 mb-3">소스 등록</h1>
+<p class="text-secondary">보호된 플랫폼 콘텐츠를 우회 다운로드하지 않습니다. 권리가 있는 파일만 업로드하세요.</p>
+<form method="post" enctype="multipart/form-data" class="row g-3">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="col-md-8">
+    <label class="form-label">제목</label>
+    <input class="form-control" name="title" required>
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">카테고리</label>
+    <input class="form-control" name="category">
+  </div>
+  <div class="col-md-8">
+    <label class="form-label">원본 URL (출처 기록용)</label>
+    <input class="form-control" name="origin_url" placeholder="https://">
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">제작자</label>
+    <input class="form-control" name="creator">
+  </div>
+  <div class="col-12">
+    <label class="form-label">영상 파일 업로드</label>
+    <input class="form-control" type="file" name="file" accept=".mp4,.mov,.mkv,.webm,.avi">
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">라이선스</label>
+    <input class="form-control" name="license_name" placeholder="CC-BY, Public Domain 등">
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">태그</label>
+    <input class="form-control" name="tags">
+  </div>
+  <div class="col-12">
+    <label class="form-label">메모</label>
+    <textarea class="form-control" name="notes"></textarea>
+  </div>
+  <div class="col-12">
+    <div class="form-check"><input class="form-check-input" type="checkbox" name="rights_owner" id="c1"><label class="form-check-label" for="c1">이 콘텐츠의 저작권을 보유하고 있습니다.</label></div>
+    <div class="form-check"><input class="form-check-input" type="checkbox" name="reuse_permitted" id="c2"><label class="form-check-label" for="c2">재사용 및 2차 제작 허가를 받았습니다.</label></div>
+    <div class="form-check"><input class="form-check-input" type="checkbox" name="reusable_license" id="c3"><label class="form-check-label" for="c3">해당 콘텐츠는 재사용 가능한 라이선스를 가지고 있습니다.</label></div>
+    <div class="form-check"><input class="form-check-input" type="checkbox" name="public_domain" id="c4"><label class="form-check-label" for="c4">퍼블릭 도메인 콘텐츠입니다.</label></div>
+    <p class="small text-warning mt-2">하나 이상 확인하지 않으면 자동 제작이 제한됩니다.</p>
+  </div>
+  <div class="col-12"><button class="btn btn-danger">등록</button></div>
+</form>
+{% endblock %}

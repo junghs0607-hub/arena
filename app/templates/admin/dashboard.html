@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">대시보드</h1>
+<div class="row g-3 mb-4">
+  {% for key, label in [
+    ('in_progress','제작 중'),('review','검수 대기'),('uploaded','업로드 완료'),
+    ('failed','업로드/제작 실패'),('scheduled','예약 영상'),('views','총 조회수'),
+    ('avg_views','평균 조회수'),('likes','좋아요'),('comments','댓글'),('subs','구독자 증가'),
+    ('sources','소스 수'),('today','활성 프로젝트')
+  ] %}
+  <div class="col-6 col-md-3">
+    <div class="card bg-black border-secondary h-100">
+      <div class="card-body">
+        <div class="text-secondary small">{{ label }}</div>
+        <div class="fs-3 fw-bold">{{ counts[key] }}</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<div class="row">
+  <div class="col-md-7">
+    <h2 class="h5">최근 프로젝트</h2>
+    <table class="table table-dark table-sm">
+      <thead><tr><th>ID</th><th>제목</th><th>포맷</th><th>상태</th></tr></thead>
+      <tbody>
+      {% for p in projects %}
+        <tr>
+          <td>{{ p.id }}</td>
+          <td><a href="{{ url_for('projects.detail', pid=p.id) }}">{{ p.title }}</a></td>
+          <td>{{ p.format_type }}</td>
+          <td><span class="badge text-bg-secondary">{{ p.status }}</span></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4">아직 프로젝트가 없습니다.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="col-md-5">
+    <h2 class="h5">작업 로그</h2>
+    <table class="table table-dark table-sm">
+      <thead><tr><th>Job</th><th>Task</th><th>상태</th></tr></thead>
+      <tbody>
+      {% for j in jobs %}
+        <tr>
+          <td>{{ j.id }}</td>
+          <td>{{ j.task }}</td>
+          <td>{{ j.status }}{% if j.error_message %}<div class="small text-danger">{{ j.error_message }}</div>{% endif %}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3">로그 없음</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

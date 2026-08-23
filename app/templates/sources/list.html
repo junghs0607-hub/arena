@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h1 class="h3">{% if trash %}휴지통{% else %}소스 영상{% endif %}</h1>
+  <div>
+    <a class="btn btn-outline-light btn-sm" href="{{ url_for('sources.list_sources', trash=0 if trash else 1) }}">{% if trash %}목록{% else %}휴지통{% endif %}</a>
+    <a class="btn btn-danger btn-sm" href="{{ url_for('sources.new_source') }}">소스 등록</a>
+  </div>
+</div>
+<table class="table table-dark">
+  <thead><tr><th>ID</th><th>제목</th><th>권리</th><th>상태</th><th></th></tr></thead>
+  <tbody>
+  {% for s in items %}
+    <tr>
+      <td>{{ s.id }}</td>
+      <td>{{ s.title }}<div class="small text-secondary">{{ s.origin_url or s.file_path }}</div></td>
+      <td>{% if s.rights_confirmed %}<span class="badge text-bg-success">확인</span>{% else %}<span class="badge text-bg-warning text-dark">미확인</span>{% endif %}</td>
+      <td>{{ s.status }}</td>
+      <td>
+        {% if not s.is_deleted %}
+        <form method="post" action="{{ url_for('sources.delete_source', sid=s.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-secondary">삭제</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5">등록된 소스가 없습니다.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

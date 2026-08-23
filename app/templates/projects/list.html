@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h1 class="h3">{% if fmt %}{{ fmt }}{% elif trash %}휴지통{% else %}제작 영상{% endif %}</h1>
+  <a class="btn btn-danger btn-sm" href="{{ url_for('projects.new_project') }}">새 프로젝트</a>
+</div>
+<table class="table table-dark">
+  <thead><tr><th>ID</th><th>제목</th><th>포맷</th><th>상태</th><th></th></tr></thead>
+  <tbody>
+  {% for p in items %}
+    <tr>
+      <td>{{ p.id }}</td>
+      <td><a href="{{ url_for('projects.detail', pid=p.id) }}">{{ p.title }}</a></td>
+      <td>{{ p.format_type }} / {{ p.target_duration }}s</td>
+      <td>{{ p.status }}</td>
+      <td>
+        <form method="post" action="{{ url_for('projects.delete_project', pid=p.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-secondary">삭제</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5">프로젝트가 없습니다.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
