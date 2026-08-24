@@ -12,4 +12,10 @@ npm run dev
 npm run worker
 ```
 
-소스, 프로젝트, Job, Queue, 예약, 통계 및 미디어 API는 로그인 세션이 필요합니다. Source/Project/Schedule/Queue는 사용자 소유권을 검증합니다. 관리 API는 `requireAdmin()`을 사용합니다. 모든 외부 URL은 합법적 재사용 권한이 확인된 경우에만 처리해야 합니다.
+## 보안 적용
+세션이 필요한 API와 프로젝트/소스 소유권 검사를 적용합니다. Source, Project, Job, Queue, Schedule, Pipeline은 사용자별로 격리됩니다. 미디어 API는 `projectId`/`sourceId`를 함께 보내면 소유권 확인을 수행합니다.
+
+## 주요 API
+`/api/auth/*`, `/api/sources`, `/api/projects`, `/api/uploads`, `/api/metadata`, `/api/stt`, `/api/tts`, `/api/render`, `/api/thumbnail`, `/api/subtitles`, `/api/pipeline`, `/api/queue`, `/api/jobs`, `/api/schedules`, `/api/youtube/*`, `/api/statistics`.
+
+외부 URL은 반드시 사용 권한을 보유한 소스만 처리해야 합니다. 운영에서는 S3/MinIO, 이메일 Provider, OAuth state 검증, Redis rate limit을 사용해야 합니다.
