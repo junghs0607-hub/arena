@@ -1,0 +1,1 @@
+import {Queue,Worker,Job} from 'bullmq';const connection={url:process.env.REDIS_URL||'redis://127.0.0.1:6379'};export const pipelineQueue=new Queue('clipforge-pipeline',{connection});export function startWorker(handler:(job:Job)=>Promise<unknown>){return new Worker('clipforge-pipeline',handler,{connection,concurrency:Number(process.env.WORKER_CONCURRENCY||1)})}
