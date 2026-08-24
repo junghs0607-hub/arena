@@ -1,0 +1,1 @@
+import {NextResponse} from 'next/server';export async function GET(req:Request){const code=new URL(req.url).searchParams.get('code');if(!code)return NextResponse.json({error:'CODE_REQUIRED'},{status:400});return NextResponse.json({error:'GOOGLE_TOKEN_EXCHANGE_REQUIRES_ID_TOKEN_VERIFICATION'},{status:501})}
