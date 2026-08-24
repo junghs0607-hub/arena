@@ -1,9 +1,6 @@
 # ClipForge AI
 
-## Auth
-`POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /auth`.
-
-Source and project APIs now require a session and scope reads/writes to the authenticated user. Jobs and statistics also require a session. Admin endpoints use `requireAdmin()`.
+인증 세션 기반 영상 자동화 플랫폼 기반입니다.
 
 ## 실행
 ```bash
@@ -12,10 +9,16 @@ npm install
 docker compose up -d
 npm run db:push
 npm run dev
+# 별도 터미널
 npm run worker
 ```
 
-## API
-`/api/uploads`, `/api/metadata`, `/api/stt`, `/api/tts`, `/api/render`, `/api/thumbnail`, `/api/subtitles`, `/api/youtube/upload` provide media operations. `/api/pipeline` and `/api/queue` run AI pipelines; `/api/queue/{id}` tracks/cancels jobs. `/api/schedules` manages schedules; `/api/scheduler/tick` dispatches due schedules. `/api/statistics` returns stored totals.
+## 인증 API
+`POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /auth`.
 
-Production must use S3/MinIO, authentication on every media endpoint, encrypted OAuth tokens, an email provider, and a distributed rate limiter. External URLs must only be processed with verified reuse rights.
+소스, 프로젝트, Job, Queue, 통계 API는 세션이 필요합니다. 프로젝트/소스 생성 및 조회는 사용자별로 분리됩니다.
+
+## 미디어/Pipeline API
+`/api/uploads`, `/api/metadata`, `/api/stt`, `/api/tts`, `/api/render`, `/api/thumbnail`, `/api/subtitles`, `/api/youtube/upload`, `/api/pipeline`, `/api/queue`, `/api/jobs/run`.
+
+외부 URL은 반드시 사용 권한을 보유한 소스만 처리해야 합니다. 운영에서는 모든 미디어 API에 세션 및 리소스 소유권 검사를 적용하고 S3/MinIO, 이메일 Provider, OAuth state 검증, Redis rate limit을 사용해야 합니다.
