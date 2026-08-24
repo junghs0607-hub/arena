@@ -1,10 +1,10 @@
-import {currentUser} from '../../../lib/auth';import { NextResponse } from 'next/server';
+import {ownsProject} from '../../../lib/ownership';import {currentUser} from '../../../lib/auth';import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 export const runtime='nodejs';
-export async function POST(req:Request){const u=await currentUser();if(!u)return NextResponse.json({error:'UNAUTHORIZED'},{status:401});
+export async function POST(req:Request){const u=await currentUser();if(!u)return NextResponse.json({error:'UNAUTHORIZED'},{status:401});const form=await req.formData();const projectId=String(form.get('projectId')||'');if(!projectId||!await ownsProject(u.id,projectId))return NextResponse.json({error:'NOT_FOUND'},{status:404});
  const f=(await req.formData()).get('file');
  if(!(f instanceof File)) return NextResponse.json({error:'FILE_REQUIRED'},{status:400});
  const dir='/tmp/clipforge-thumbnails'; await mkdir(dir,{recursive:true});
