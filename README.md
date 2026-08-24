@@ -14,8 +14,10 @@ npm run dev
 - `POST /api/metadata`: multipart 영상 FFprobe 메타데이터
 - `POST /api/stt`: Whisper CLI STT, `file`, `language`
 - `POST /api/tts`: OpenAI TTS (`text`, `voice`)
-- `POST /api/render`: multipart 영상, `format=shorts|longform`; Shorts는 720x1280 FFmpeg 변환
+- `POST /api/render`: multipart 영상, `format=shorts|longform`
+- `POST /api/thumbnail`: 영상에서 1280x720 JPEG 프레임 추출
 - `POST /api/subtitles`: JSON segments를 WebVTT로 반환
+- `POST /api/youtube/upload`: Bearer YouTube OAuth token + multipart `file`, `title`, `description`, `tags`, `privacy`, `publishAt`
 
 ## 자동화
 - `POST /api/pipeline`: AI 분석/대본/메타데이터 Pipeline
