@@ -1,7 +1,5 @@
 # ClipForge AI
 
-인증·소유권 기반 영상 자동화 플랫폼.
-
 ## 실행
 ```bash
 cp .env.example .env.local
@@ -12,10 +10,11 @@ npm run dev
 npm run worker
 ```
 
-## Auth API
-- `POST /api/auth/register`, `/login`, `/logout`, `GET /me`
-- `POST /api/auth/reset/request`, `POST /api/auth/reset/confirm`
-- `POST /api/auth/verification/resend`, `GET /api/auth/verify?token=...`
-- `GET /api/auth/google`, `GET /api/auth/google/callback`
+## 인증/YouTube
+`/auth` 로그인 UI. Auth API는 register/login/logout/me, password reset, email verify, Google OAuth를 제공합니다. YouTube OAuth callback은 인증된 사용자에게 채널을 조회하고 Access/Refresh Token을 암호화해 저장합니다.
 
-Source/Project/Job/Queue/Schedule/Pipeline/Media/YouTube API는 세션과 리소스 소유권을 검사합니다. 외부 URL은 사용 권한을 보유한 소스만 처리합니다. 운영에서는 이메일 Provider, Google ID token 검증, S3/MinIO, Redis rate limit을 설정하세요.
+- `GET /api/youtube/channels`: 내 채널 목록
+- `DELETE /api/youtube/channels/{id}`: 내 채널 연결 해제
+- `POST /api/youtube/upload`: 소유한 channelId/projectId로 resumable upload
+
+모든 Source/Project/Job/Queue/Schedule/Pipeline/Media API는 세션 및 리소스 소유권을 확인합니다. 외부 URL은 재사용 권리가 확인된 소스만 처리합니다.
