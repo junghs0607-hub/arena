@@ -1,0 +1,1 @@
+import {NextResponse} from 'next/server';import {requireAdmin} from '../../../../lib/auth';export async function GET(){try{const u=await requireAdmin();return NextResponse.json({ok:true,admin:u.email})}catch(e){return NextResponse.json({error:String(e).includes('FORBIDDEN')?'FORBIDDEN':'UNAUTHORIZED'},{status:String(e).includes('FORBIDDEN')?403:401})}}

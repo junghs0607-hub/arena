@@ -1,0 +1,3 @@
+import {spawn} from 'node:child_process';
+export function renderVertical(input:string,output:string){return new Promise<void>((resolve,reject)=>{const p=spawn('ffmpeg',['-y','-i',input,'-vf','scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,format=yuv420p','-c:v','libx264','-c:a','aac',output]);let error='';p.stderr.on('data',d=>error+=d);p.on('close',code=>code===0?resolve():reject(new Error(error.slice(-1000))))})}
+export function extractAudio(input:string,output:string){return new Promise<void>((resolve,reject)=>{const p=spawn('ffmpeg',['-y','-i',input,'-vn','-acodec','pcm_s16le',output]);p.on('close',c=>c===0?resolve():reject(new Error('ffmpeg audio extraction failed')))})}
