@@ -1,6 +1,9 @@
 # ── 나레이션(TTS) ──
-edge-tts>=7.0,<9          # 고품질 한국어 신경망 음성 (기본)
+edge-tts>=7.0,<9          # 고품질 한국어 신경망 클라우드 음성 (기본)
 gTTS>=2.5                  # 평활 백엔드 (선택)
+# [선택] 로컬 고품질 TTS — 한국어 Sohee 프리셋/보이스 클론 (GPU 권장, ~수 GB):
+#   pip install -U qwen-tts
+#   (torch는 환경에 맞게: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu128)
 
 # ── 자막 타이밍(Whisper) ──
 faster-whisper>=1.0       # CPU는 int8, GPU(float16)면 더 정확/더 빠름

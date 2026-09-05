@@ -154,6 +154,115 @@ def test_generate_script_mock_provider(tmp: Path | None = None):
         assert len(parsed) == 4 and all(sc.sentences for sc in parsed)
 
 
+# ── Qwen3-TTS 백엔드 (스텁 주입, 네트워크/토치 불필요) ─
+
+import math
+import struct
+import sys
+import types as _pytypes
+import wave as _wave
+
+from pipeline.config import Settings as _Settings
+from pipeline import narration as _nar
+
+
+def _settings(tmp: Path, **kw) -> _Settings:
+    base = dict(script_path=tmp / "s.txt", media_dir=tmp, work_dir=tmp / "w", out_dir=tmp / "o")
+    base.update(kw)
+    return _Settings(**base)
+
+
+def _install_qwen_stubs():
+    class FakeModel:
+        @classmethod
+        def from_pretrained(cls, model_id, device_map=None, dtype=None):
+            self = cls()
+            self.model_id = model_id
+            return self
+
+        def generate_custom_voice(self, text, language, speaker, **kw):
+            sr = 24000
+            n = sr // 2  # 0.5초 사인파
+            return [[math.sin(2 * math.pi * 440 * i / sr) for i in range(n)]], sr
+
+        def generate_voice_design(self, text, language, instruct):
+            return self.generate_custom_voice(text, language, "design")
+
+        def create_voice_clone_prompt(self, ref_audio, ref_text=None):
+            return {"ref": ref_audio, "ref_text": ref_text}
+
+        def generate_voice_clone(self, text, language, voice_clone_prompt):
+            return self.generate_custom_voice(text, language, "clone")
+
+    fake_qwen = _pytypes.ModuleType("qwen_tts")
+    fake_qwen.Qwen3TTSModel = FakeModel
+
+    def sf_write(path, wav, sr):
+        with _wave.open(path, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(sr)
+            w.writeframes(b"".join(struct.pack("<h", int(x * 30000)) for x in wav))
+
+    fake_sf = _pytypes.ModuleType("soundfile")
+    fake_sf.write = sf_write
+
+    fake_torch = _pytypes.ModuleType("torch")
+    fake_torch.bfloat16 = "bf16"
+    fake_torch.float32 = "f32"
+    fake_torch.cuda = _pytypes.SimpleNamespace(is_available=lambda: False)
+
+    saved = {k: sys.modules.get(k) for k in ("qwen_tts", "soundfile", "torch")}
+    sys.modules.update({"qwen_tts": fake_qwen, "soundfile": fake_sf, "torch": fake_torch})
+    return saved
+
+
+def _restore_modules(saved):
+    for k, v in saved.items():
+        if v is None:
+            sys.modules.pop(k, None)
+        else:
+            sys.modules[k] = v
+
+
+def test_tts_backend_order():
+    assert _nar._backend_order("auto") == ["qwen", "edge", "gtts"]
+    assert _nar._backend_order("qwen,edge") == ["qwen", "edge"]
+    assert _nar._backend_order("gtts") == ["gtts"]
+
+
+def test_qwen_say_custom_voice_produces_mp3():
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        saved = _install_qwen_stubs()
+        try:
+            s = _settings(d, tts_backend="qwen", qwen_device="cpu")
+            out = d / "scene_00.mp3"
+            _nar.synthesize_scene("테스트 문장입니다.", out, s)
+            assert out.exists() and out.stat().st_size > 0
+            assert out.read_bytes()[:3] in (b"ID3", b"\xff\xfb", b"\xff\xf3", b"\xff\xf2")  # mp3 헤더
+        finally:
+            _restore_modules(saved)
+            _nar._qwen_cache.clear()
+
+
+def test_qwen_base_model_requires_ref_audio():
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        saved = _install_qwen_stubs()
+        try:
+            s = _settings(d, tts_backend="qwen", qwen_device="cpu",
+                          qwen_model="Qwen/Qwen3-TTS-12Hz-1.7B-Base")
+            try:
+                _nar._qwen_say("문장.", d / "x.mp3", s)
+                assert False, "레퍼런스 없으면 예외여야 함"
+            except RuntimeError as e:
+                assert "ref" in str(e).lower() or "레퍼런스" in str(e)
+        finally:
+            _restore_modules(saved)
+            _nar._qwen_cache.clear()
+
+
 # ── 직접 실행 지원 ─────────────────────────────────────
 
 if __name__ == "__main__":

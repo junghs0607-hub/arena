@@ -30,7 +30,21 @@ class Settings:
     #   남성 ko-KR-InJoonNeural, ko-KR-HyunsuNeural
     voice: str = "ko-KR-SunHiNeural"
     rate: str = "+6%"                     # 말하기 속도 (예: "-10%", "+0%")
-    tts_backend: str = "auto"             # auto | edge | gtts
+    tts_backend: str = "auto"             # auto | qwen | edge | gtts (콤마로 체인 가능: "qwen,edge")
+
+    # ── Qwen3-TTS (로컬 고품질 TTS, 한국어 Sohee 프리셋) ──
+    # 모델 예시:
+    #   Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice  (기본, 9개 프리셋+지시 제어)
+    #   Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice  (경량)
+    #   Qwen/Qwen3-TTS-12Hz-1.7B-Base         (레퍼런스 음성으로 보이스 클론)
+    #   Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign  (텍스트 지시로 목소리 설계)
+    qwen_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+    qwen_speaker: str = "Sohee"           # 한국어 여성 프리셋
+    qwen_language: str = "Korean"
+    qwen_device: str = "auto"             # auto | cpu | cuda:0 ...
+    qwen_instruct: str = ""               # 톤 지시 (예: "차분하고 신뢰감 있는 낭독")
+    qwen_ref_audio: Path | None = None    # Base(보이스 클론)용 레퍼런스 음성 (3초+)
+    qwen_ref_text: str = ""               # 레퍼런스 음성의 대사(클론 정확도 향상)
 
     # ── Whisper (자막 타이밍) ────────────────────────────
     use_whisper: bool = True

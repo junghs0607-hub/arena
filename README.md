@@ -152,8 +152,32 @@ python build.py scriptgen --topic "카페인의 과학" --scenes 4 --duration 30
 ## 4. 핵심 기능
 
 ### 🎙 나레이션 (TTS)
-- 기본: **edge-tts** 신경망 한국어 음성 (묻지도 따지지도 않는 물료 고품질)
-- 평활: edge 실패 시 **gTTS** 자동 대체 (`--tts-backend edge|gtts|auto`)
+
+**① Qwen3-TTS — 로컬 고품질 (권장, 한국어 Sohee)**
+
+```bash
+pip install -U qwen-tts                      # torch는 CUDA 버전에 맞게 설치 권장
+python build.py audio --tts-backend qwen     # 최초 1회 모델 다운로드(수 GB)
+```
+
+| 항목 | 옵션 |
+|---|---|
+| 스피커 | `--qwen-speaker Sohee`(기본, 한국어 감성 여성) 외 8개 프리셋(Ryan·Aiden·…) |
+| 톤 지시 | `--qwen-instruct "차분하고 신뢰감 있는 낭독"` (CustomVoice/VoiceDesign) |
+| 모델 | `…-1.7B-CustomVoice`(기본) · `…-0.6B-CustomVoice`(경량) · `…-1.7B-VoiceDesign` · `…-*-Base`(클론) |
+| 보이스 클론 | `--qwen-model Qwen/Qwen3-TTS-12Hz-1.7B-Base --qwen-ref-audio my_voice.mp3 --qwen-ref-text "레퍼런스 대사"` |
+| 디바이스 | `--qwen-device auto\|cpu\|cuda:0` (GPU 없으면 자동 cpu) |
+
+**② 엔진 체인 (`--tts-backend`)** — auto 기본값은 `qwen → edge → gtts` 순 자동 평활(미설치/실패 시 다음으로):
+
+| 값 | 의미 |
+|---|---|
+| `auto` | qwen → edge → gtts (권장) |
+| `qwen` | Qwen3-TTS만 사용 |
+| `qwen,edge` | 로컬 우선 + 클라우드 평활 |
+| `edge` / `gtts` | 클라우드 신경망 / 경량 |
+
+**③ edge-tts 음성 (`--voice`)** — qwen 미사용 시 적용
 - 외부 목소리(다른 TTS/직접 녹음)를 쓰고 싶다면:
 
 ```bash
@@ -161,7 +185,7 @@ assets/narration/scene_00.mp3   # ← 씬 번호로 넣으면 TTS를 건드리�
 assets/narration/scene_01.mp3
 ```
 
-**한국어 음성 예시** (`--voice`)
+**한국어 edge 음성 예시** (`--voice`)
 | 음성 | 특징 |
 |---|---|
 | `ko-KR-SunHiNeural` (기본) | 밝은 여성, 정보 전달 |
@@ -275,6 +299,8 @@ npm run remotion:render           # 오버레이만 수동 렌더
 | 자막이 말보다 늦게/빨리 나옴 | `--whisper-model small` 이상으로 정확도 상승, 씬 문장을 더 짧게 |
 | 한글 자막이 네모(□)로 깨짐 | Noto Sans KR/Pretendard 폰트를 OS에 설치 |
 | TTS 연결 실패 | 네트워크가 막힌 환경이면 `assets/narration/`에 녹음 mp3를 넣고 재실행 (TTS 자동 생략) |
+| Qwen3-TTS 로드 실패 | `pip install -U qwen-tts` + torch 설치 확인, VRAM 부족 시 `…-0.6B-CustomVoice` 또는 `--qwen-device cpu`, 최초 1회 HF 접속 필요 |
+| Qwen 생성이 느림 | CPU 추론은 씬당 수십 초 — GPU(cuda:0) 사용, 또는 0.6B 모델/short 대본 |
 | AI 대본 생성 오류(502/키 없음) | `export OPENAI_API_KEY=...` 설정, 로컬 LLM이면 `base_url` 지정, 네트워크 불가 시 provider를 `mock`으로 |
 | 생성 대본 형식 오류 | `admin/script_prompt.txt`의 [출력 형식] 규칙(빈 줄=씬, 문장부호 종료)이 지워지지 않았는지 확인 |
 | GPU 메모리 부족 | `--whisper-model tiny --whisper-device cpu` |

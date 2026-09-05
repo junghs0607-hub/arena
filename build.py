@@ -167,7 +167,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--narration-dir", default="assets/narration", help="사전 녹음 나레이션 폴더 (scene_XX.mp3 있으면 TTS 생략)")
     p.add_argument("--voice", default="ko-KR-SunHiNeural", help="edge-tts 음성 (남성: ko-KR-InJoonNeural)")
     p.add_argument("--rate", default="+6%", help="말하기 속도 (예: -10%%, +10%%)")
-    p.add_argument("--tts-backend", default="auto", choices=["auto", "edge", "gtts"])
+    p.add_argument("--tts-backend", default="auto",
+                   help="엔진: auto | qwen | edge | gtts (콤마 체인: 'qwen,edge')")
+    # ── Qwen3-TTS (로컬 고품질) ──
+    p.add_argument("--qwen-model", default="Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+                   help="Qwen3-TTS 모델 id (경량: ...-0.6B-CustomVoice, 클론: ...-Base)")
+    p.add_argument("--qwen-speaker", default="Sohee", help="프리셋 스피커 (한국어: Sohee)")
+    p.add_argument("--qwen-language", default="Korean")
+    p.add_argument("--qwen-device", default="auto", help="auto | cpu | cuda:0")
+    p.add_argument("--qwen-instruct", default="", help="톤 지시 (예: '차분하고 신뢰감 있는 낭독')")
+    p.add_argument("--qwen-ref-audio", default=None, help="보이스 클론 레퍼런스 음성 (Base 모델용, 3초+)")
+    p.add_argument("--qwen-ref-text", default="", help="레퍼런스 음성의 대사")
     p.add_argument("--no-whisper", action="store_true", help="Whisper 대신 문장 길이 비례 자막 사용")
     p.add_argument("--whisper-model", default="base", help="tiny/base/small/medium/large-v3")
     p.add_argument("--whisper-device", default="auto", choices=["auto", "cpu", "cuda"])
@@ -202,6 +212,13 @@ def make_settings(args: argparse.Namespace) -> Settings:
         voice=args.voice,
         rate=args.rate,
         tts_backend=args.tts_backend,
+        qwen_model=args.qwen_model,
+        qwen_speaker=args.qwen_speaker,
+        qwen_language=args.qwen_language,
+        qwen_device=args.qwen_device,
+        qwen_instruct=args.qwen_instruct,
+        qwen_ref_audio=Path(args.qwen_ref_audio) if args.qwen_ref_audio else None,
+        qwen_ref_text=args.qwen_ref_text,
         use_whisper=not args.no_whisper,
         whisper_model=args.whisper_model,
         whisper_device=args.whisper_device,

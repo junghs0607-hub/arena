@@ -122,7 +122,32 @@
         <label for="padding">씬 끝 여백(초)</label>
         <input type="number" id="padding" name="padding" value="0.4" min="0" max="2" step="0.1">
       </div>
+      <div>
+        <label for="tts_backend">🔊 TTS 엔진</label>
+        <select id="tts_backend" name="tts_backend">
+          {% for v, label in tts_engines %}
+          <option value="{{ v }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="qwen_speaker">Qwen 스피커</label>
+        <select id="qwen_speaker" name="qwen_speaker">
+          {% for v, label in qwen_speakers %}
+          <option value="{{ v }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="qwen_instruct">Qwen 톤 지시 (선택)</label>
+        <input type="text" id="qwen_instruct" name="qwen_instruct" placeholder="예: 차분하고 신뢰감 있는 낭독">
+      </div>
+      <div>
+        <label for="qwen_model">Qwen 모델 (고급)</label>
+        <input type="text" id="qwen_model" name="qwen_model" placeholder="기본: 1.7B-CustomVoice">
+      </div>
     </div>
+    <div class="hint">Qwen3-TTS는 로컬 추론입니다. 최초 1회 모델 다운로드(수 GB) + <code>pip install qwen-tts</code>, GPU 권장. 미설치 시 auto가 edge-tts로 자동 평활.</div>
 
     <div class="checks">
       <label class="chk"><input type="checkbox" name="no_whisper" value="1"> Whisper 생략(비례 자막)</label>

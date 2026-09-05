@@ -54,6 +54,25 @@ VOICES = [
     ("ko-KR-YuJinNeural", "유진 — 여성"),
     ("ko-KR-HyunsuMultilingualNeural", "현수 멀티 — 다국어 남성"),
 ]
+# Qwen3-TTS CustomVoice 프리셋 (공식 9종)
+QWEN_SPEAKERS = [
+    ("Sohee", "소희 — 한국어, 감성적인 여성 (기본)"),
+    ("Ryan", "라이언 — 영어 남성, 리듬감"),
+    ("Aiden", "에이든 — 영어 남성, 맑은 중음"),
+    ("Vivian", "비비안 — 중국어 여성, 밝음"),
+    ("Serena", "세레나 — 중국어 여성, 온화"),
+    ("Dylan", "딜런 — 베이징 남성"),
+    ("Eric", "에릭 — 청두 남성, 허스키"),
+    ("Uncle_Fu", "푸 아저씨 — 중년 남성, 저음"),
+    ("Ono_Anna", "오노 안나 — 일본어 여성, 발랄"),
+]
+TTS_ENGINES = [
+    ("auto", "auto — qwen→edge→gtts 자동"),
+    ("qwen", "Qwen3-TTS (로컬, Sohee)"),
+    ("qwen,edge", "Qwen3-TTS + edge-tts 평활"),
+    ("edge", "edge-tts (클라우드 신경망)"),
+    ("gtts", "gTTS (경량)"),
+]
 RATES = ["-20%", "-10%", "+0%", "+6%", "+10%", "+20%"]
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v3"]
 
@@ -118,6 +137,14 @@ def run_stage(job: dict, stage: str) -> None:
     ]:
         if job.get(flag):
             cmd.append(cli)
+    # TTS 엔진(Qwen3-TTS 포함) 체인
+    cmd += ["--tts-backend", job.get("tts_backend") or "auto"]
+    if "qwen" in (job.get("tts_backend") or ""):
+        cmd += ["--qwen-speaker", job.get("qwen_speaker") or "Sohee"]
+        if job.get("qwen_model"):
+            cmd += ["--qwen-model", job["qwen_model"]]
+        if job.get("qwen_instruct"):
+            cmd += ["--qwen-instruct", job["qwen_instruct"]]
 
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
@@ -187,6 +214,8 @@ def index():
         voices=VOICES,
         rates=RATES,
         whisper_models=WHISPER_MODELS,
+        tts_engines=TTS_ENGINES,
+        qwen_speakers=QWEN_SPEAKERS,
     )
 
 
@@ -291,6 +320,10 @@ def generate():
         "out_dir": out_dir,
         "voice": request.form.get("voice") or "ko-KR-SunHiNeural",
         "rate": request.form.get("rate") or "+6%",
+        "tts_backend": request.form.get("tts_backend") or "auto",
+        "qwen_speaker": request.form.get("qwen_speaker") or "Sohee",
+        "qwen_model": request.form.get("qwen_model") or "",
+        "qwen_instruct": request.form.get("qwen_instruct") or "",
         "whisper_model": request.form.get("whisper_model") or "base",
         "watermark": request.form.get("watermark") or "",
         "padding": request.form.get("padding") or "0.4",
