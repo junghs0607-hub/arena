@@ -1,0 +1,16 @@
+{
+  "provider": "openai-compatible",
+  "model": null,
+  "base_url": null,
+  "api_key_env": "OPENAI_API_KEY",
+  "temperature": 0.8,
+  "max_tokens": 1200,
+
+  "_주석": {
+    "provider": "openai-compatible = OpenAI / Ollama / LM Studio 등 OpenAI 호환 API | mock = 오프라인 시연용(네트워크 불필요)",
+    "model": "null이면 환경변수 OPENAI_MODEL → 그것도 없으면 gpt-4o-mini",
+    "base_url": "로컬/프록시 엔드포인트 (예: http://localhost:11434/v1). null이면 환경변수 OPENAI_BASE_URL → OpenAI 기본",
+    "api_key_env": "API 키를 담은 환경변수 이름 (키 값 자체는 파일에 저장하지 마세요!)",
+    "local_override": "admin/llm.local.json 파일이 있으면 이 파일보다 우선 (git 무시됨)"
+  }
+}

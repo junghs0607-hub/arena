@@ -1,0 +1,23 @@
+{
+  "name": "shorts-assembler",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Semi-auto shorts assembler (Remotion overlay)",
+  "scripts": {
+    "remotion:studio": "remotion studio remotion/src/index.ts",
+    "remotion:render": "remotion render remotion/src/index.ts ShortsOverlay work/overlay.webm --codec=vp9 --pixel-format=yuva420p --props=work/remotion_props.json --overwrite",
+    "browser:ensure": "remotion browser ensure",
+    "typecheck": "tsc -p remotion/tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.0",
+    "typescript": "^5.6.0"
+  }
+}

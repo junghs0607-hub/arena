@@ -1,0 +1,19 @@
+# ── 나레이션(TTS) ──
+edge-tts>=7.0,<9          # 고품질 한국어 신경망 음성 (기본)
+gTTS>=2.5                  # 평활 백엔드 (선택)
+
+# ── 자막 타이밍(Whisper) ──
+faster-whisper>=1.0       # CPU는 int8, GPU(float16)면 더 정확/더 빠름
+
+# ── 웹 UI (대본 입력 → 파일 생성) ──
+Flask>=3.0,<4
+
+# ── AI 대본 생성 (주제 → 대본) ──
+openai>=1.0               # OpenAI 호환(OpenAI/Ollama/LM Studio) Chat Completions
+
+# 참고) ffmpeg/ffprobe 는 OS 패키지로 설치하는 것을 권장합니다.
+#       ffprobe 없이 ffmpeg만 있어도 동작하며, imageio-ffmpeg 설치 시
+#       그 바이너리를 자동으로 찾아 사용합니다:
+#         Ubuntu/Debian : sudo apt install ffmpeg
+#         macOS         : brew install ffmpeg
+#         pip 대안      : pip install imageio-ffmpeg

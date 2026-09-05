@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>반자동 쇼츠 조립 시스템</title>
+<style>
+  :root{
+    --bg:#0b0f17; --card:#131a26; --card2:#0f1520; --line:#233046;
+    --text:#e8eef8; --muted:#8ea1bd; --accent:#4f8cff; --accent2:#ff3b5c;
+    --ok:#2fd48a; --err:#ff5c6c; --mono:"SFMono-Regular",Consolas,"Noto Sans Mono CJK KR",monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#0b0f17,#0d1322);color:var(--text);
+       font-family:"Pretendard","Noto Sans KR","Malgun Gothic",-apple-system,sans-serif; min-height:100vh}
+  .wrap{max-width:920px;margin:0 auto;padding:36px 18px 80px}
+  h1{font-size:26px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+        padding:22px;margin-bottom:22px;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+  label{display:block;font-size:13px;font-weight:700;margin:16px 0 6px;color:#c9d6ea}
+  textarea{width:100%;min-height:220px;resize:vertical;background:var(--card2);color:var(--text);
+        border:1px solid var(--line);border-radius:12px;padding:14px;font-size:14px;line-height:1.6;
+        font-family:inherit}
+  textarea:focus,input:focus,select:focus{outline:2px solid var(--accent);border-color:transparent}
+  input[type=text],input[type=number],select{width:100%;background:var(--card2);color:var(--text);
+        border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px}
+  input[type=file]{font-size:13px;color:var(--muted)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px}
+  .checks{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px}
+  .chk{display:flex;align-items:center;gap:7px;font-size:13px;color:#c9d6ea}
+  .chk input{accent-color:var(--accent);width:16px;height:16px}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:12px;cursor:pointer;
+       font-weight:800;font-size:15px;padding:13px 26px;color:#fff;background:linear-gradient(135deg,#4f8cff,#3b6ee0);
+       transition:transform .06s ease, filter .2s}
+  .btn:hover{filter:brightness(1.12)} .btn:active{transform:scale(.97)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .badge{display:inline-block;font-size:12px;font-weight:800;padding:4px 12px;border-radius:999px;
+       background:#233046;color:#c9d6ea}
+  .badge.running{background:#1f2b4f;color:#9cc3ff}
+  .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .progress{height:10px;background:#1d2940;border-radius:999px;overflow:hidden;flex:1;min-width:160px}
+  .progress>div{height:100%;width:0;background:linear-gradient(90deg,#4f8cff,#2fd48a);transition:width .5s ease}
+  .stage{font-size:13px;color:var(--muted)}
+  .logbox{background:#0a0e16;border:1px solid var(--line);border-radius:12px;margin-top:14px;
+       padding:12px 14px;height:240px;overflow-y:auto;font-family:var(--mono);font-size:12px;
+       line-height:1.55;color:#9fb2cf;white-space:pre-wrap;word-break:break-all}
+  .done-links{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .dl{text-decoration:none;font-weight:800;font-size:14px;padding:12px 20px;border-radius:12px}
+  .dl.video{background:linear-gradient(135deg,#2fd48a,#1cab68);color:#04160c}
+  .dl.srt{background:#233046;color:#dbe6f5}
+  .err{background:#2c1420;border:1px solid #57222f;color:#ffb3bd;border-radius:12px;
+       padding:12px 14px;margin-top:14px;font-size:13px}
+  .jobs{margin-top:8px;font-size:13px}
+  .jobs li{margin:4px 0;color:var(--muted)}
+  .hidden{display:none}
+  .st-queued{background:#233046} .st-running{background:#1f2b4f;color:#9cc3ff}
+  .st-done{background:#123f2c;color:#5fe3a8} .st-error{background:#3f1620;color:#ff8b98}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎬 반자동 쇼츠 조립 시스템</h1>
+  <div class="sub">대본만 붙여 넣으면 나레이션 → 자막 → 그래픽 → 최종 영상까지 자동 조립 (9:16, 1080×1920)</div>
+
+  <form id="genForm" class="card" enctype="multipart/form-data">
+    <div class="row" style="align-items:flex-end;gap:10px">
+      <div style="flex:1;min-width:220px">
+        <label for="topic" style="margin-top:0">✨ AI 대본 생성 — 주제만 입력</label>
+        <input type="text" id="topic" placeholder="예: 카페인의 과학, 아침 운동의 효과, 2026 재테크 트렌드">
+      </div>
+      <button class="btn" id="genScriptBtn" type="button" style="padding:11px 18px;white-space:nowrap">✨ 대본 생성</button>
+    </div>
+    <div id="genScriptMsg" class="hint" style="margin:6px 0 4px">관리자 프롬프트: <code>admin/script_prompt.txt</code> · LLM 설정: <code>admin/llm.json</code></div>
+
+    <label for="script">📝 대본 (빈 줄로 씬 구분 = 미디어 1개)</label>
+    <textarea id="script" name="script" placeholder="커피 한 잔이 당신의 하루를 바꾼다면 믿으시겠습니까?
+
+첫째, 카페인은 뇌의 피로 신호를 차단합니다. …
+
+(여기에 대본을 붙여 넣으세요)"></textarea>
+    <div class="hint">문장 부호(. ! ?) 기준으로 자막이 나뉩니다. 씬 수 = 업로드 미디어 수로 맞추는 것을 권장.</div>
+
+    <label for="media">🖼️ 미디어 업로드 (씬별 이미지/비디오, 여러 개 가능)</label>
+    <input type="file" id="media" name="media" multiple accept="image/*,video/*">
+    <div class="hint">번호가 붙은 이름(01_, 02_)은 그 순서, 아니면 선택 순서대로 씬에 매칭. 비워두면 서버 assets/media 사용.</div>
+
+    <label for="bgm">🎵 BGM 업로드 (선택)</label>
+    <input type="file" id="bgm" name="bgm" accept="audio/*">
+
+    <div class="grid">
+      <div>
+        <label for="voice">🎙️ 나레이션 음성</label>
+        <select id="voice" name="voice">
+          {% for v, label in voices %}
+          <option value="{{ v }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="rate">말하기 속도</label>
+        <select id="rate" name="rate">
+          {% for r in rates %}
+          <option value="{{ r }}" {% if r == "+6%" %}selected{% endif %}>{{ r }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="whisper_model">Whisper 모델</label>
+        <select id="whisper_model" name="whisper_model">
+          {% for m in whisper_models %}
+          <option value="{{ m }}" {% if m == "base" %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="watermark">워터마크 (선택)</label>
+        <input type="text" id="watermark" name="watermark" placeholder="@mychannel">
+      </div>
+      <div>
+        <label for="padding">씬 끝 여백(초)</label>
+        <input type="number" id="padding" name="padding" value="0.4" min="0" max="2" step="0.1">
+      </div>
+    </div>
+
+    <div class="checks">
+      <label class="chk"><input type="checkbox" name="no_whisper" value="1"> Whisper 생략(비례 자막)</label>
+      <label class="chk"><input type="checkbox" name="no_overlay" value="1"> ⚡ 오버레이 생략(급속 미리보기)</label>
+      <label class="chk"><input type="checkbox" name="no_duck" value="1"> BGM 덕킹 끄기</label>
+      <label class="chk"><input type="checkbox" name="loudnorm" value="1"> 라우드니스 정규화</label>
+      <label class="chk"><input type="checkbox" name="use_server_bgm" value="1"> 서버 기본 BGM 사용</label>
+    </div>
+
+    <div style="margin-top:20px">
+      <button class="btn" id="submitBtn" type="submit">🎬 영상 생성</button>
+    </div>
+  </form>
+
+  <div id="jobCard" class="card hidden">
+    <div class="row">
+      <span id="jobBadge" class="badge st-queued">대기</span>
+      <div class="progress"><div id="jobBar"></div></div>
+      <span id="jobPct" class="stage">0%</span>
+    </div>
+    <div id="jobStage" class="stage" style="margin-top:8px"></div>
+    <div id="jobErr" class="err hidden"></div>
+    <div id="logBox" class="logbox"></div>
+    <div id="doneLinks" class="done-links hidden">
+      <a id="dlVideo" class="dl video" href="#">⬇️ final.mp4 다운로드</a>
+      <a id="dlSrt" class="dl srt" href="#">⬇️ subtitles.srt</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>📂 최근 작업</label>
+    <ul id="jobList" class="jobs"></ul>
+  </div>
+</div>
+
+<script>
+const form = document.getElementById('genForm');
+const jobCard = document.getElementById('jobCard');
+const badge = document.getElementById('jobBadge');
+const bar = document.getElementById('jobBar');
+const pct = document.getElementById('jobPct');
+const stageEl = document.getElementById('jobStage');
+const logBox = document.getElementById('logBox');
+const errBox = document.getElementById('jobErr');
+const doneLinks = document.getElementById('doneLinks');
+const dlVideo = document.getElementById('dlVideo');
+const dlSrt = document.getElementById('dlSrt');
+const submitBtn = document.getElementById('submitBtn');
+const genScriptBtn = document.getElementById('genScriptBtn');
+const genScriptMsg = document.getElementById('genScriptMsg');
+
+const STATUS_LABEL = {queued:'대기', running:'실행 중', done:'완료', error:'오류'};
+let poller = null;
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  submitBtn.disabled = true;
+  const fd = new FormData(form);
+  try {
+    const res = await fetch('/api/generate', {method: 'POST', body: fd});
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || '생성 요청 실패'); return; }
+    jobCard.classList.remove('hidden');
+    doneLinks.classList.add('hidden');
+    errBox.classList.add('hidden');
+    watch(data.job_id);
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+function watch(jobId) {
+  if (poller) clearInterval(poller);
+  const tick = async () => {
+    const res = await fetch('/api/jobs/' + jobId);
+    if (!res.ok) return;
+    const j = await res.json();
+    badge.textContent = STATUS_LABEL[j.status] || j.status;
+    badge.className = 'badge st-' + j.status;
+    bar.style.width = (j.progress || 0) + '%';
+    pct.textContent = (j.progress || 0) + '%';
+    stageEl.textContent = j.stage_label ? '단계: ' + j.stage_label : '';
+    logBox.textContent = (j.log || []).join('\n');
+    logBox.scrollTop = logBox.scrollHeight;
+    if (j.status === 'error') {
+      errBox.textContent = '❌ ' + (j.error || '알 수 없는 오류');
+      errBox.classList.remove('hidden');
+      clearInterval(poller); poller = null; refreshJobs();
+    }
+    if (j.status === 'done') {
+      dlVideo.href = '/api/download/' + jobId + '/video';
+      dlSrt.href = '/api/download/' + jobId + '/srt';
+      doneLinks.classList.remove('hidden');
+      clearInterval(poller); poller = null; refreshJobs();
+    }
+  };
+  tick();
+  poller = setInterval(tick, 1500);
+}
+
+genScriptBtn.addEventListener('click', async () => {
+  const topic = document.getElementById('topic').value.trim();
+  if (!topic) { genScriptMsg.textContent = '주제를 먼저 입력하세요.'; return; }
+  genScriptBtn.disabled = true;
+  genScriptMsg.textContent = '⏳ AI가 대본을 쓰는 중… (보통 10~40초)';
+  try {
+    const r = await fetch('/api/scriptgen', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({topic, scenes: 4, duration: 30}),
+    });
+    const d = await r.json();
+    if (!r.ok) { genScriptMsg.textContent = '❌ ' + (d.error || '대본 생성 실패'); return; }
+    document.getElementById('script').value = d.script;
+    genScriptMsg.textContent = `✅ 대본 ${d.scenes}씬 생성 완료 — 검토·수정 후 아래에서 미디어를 올리세요.`;
+  } catch (e) {
+    genScriptMsg.textContent = '❌ 네트워크 오류: ' + e;
+  } finally {
+    genScriptBtn.disabled = false;
+  }
+});
+
+async function refreshJobs() {
+  try {
+    const res = await fetch('/api/jobs');
+    const data = await res.json();
+    const ul = document.getElementById('jobList');
+    ul.innerHTML = '';
+    (data.jobs || []).forEach(j => {
+      const li = document.createElement('li');
+      const label = STATUS_LABEL[j.status] || j.status;
+      li.textContent = `[${j.created_at}] ${label} — ${j.script_preview || ''}`;
+      if (j.status === 'done') {
+        const a = document.createElement('a');
+        a.href = '/api/download/' + j.id + '/video';
+        a.textContent = '  ⬇️ 다운로드';
+        a.style.color = '#5fe3a8';
+        li.appendChild(a);
+      }
+      ul.appendChild(li);
+    });
+  } catch (e) {}
+}
+refreshJobs();
+setInterval(refreshJobs, 8000);
+</script>
+</body>
+</html>
