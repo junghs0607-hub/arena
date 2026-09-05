@@ -52,6 +52,18 @@
   .dl.srt{background:#233046;color:#dbe6f5}
   .err{background:#2c1420;border:1px solid #57222f;color:#ffb3bd;border-radius:12px;
        padding:12px 14px;margin-top:14px;font-size:13px}
+  .mp-scene{background:var(--card2);border:1px solid var(--line);border-radius:12px;
+       padding:14px;margin:10px 0}
+  .mp-head{font-size:13px;font-weight:800;color:#9cc3ff;margin-bottom:6px}
+  .mp-narr{font-size:13px;color:var(--muted);margin-bottom:8px;line-height:1.5}
+  .mp-box{background:#0a0e16;border:1px solid #1d2940;border-radius:10px;padding:10px 12px;
+       font-size:12.5px;line-height:1.6;color:#cfe0f5;margin:6px 0;position:relative}
+  .mp-tag{display:inline-block;font-size:11px;font-weight:800;color:#0a0e16;background:#7fd0ff;
+       border-radius:6px;padding:1px 8px;margin-bottom:6px}
+  .mp-tag.video{background:#c0a6ff}
+  .mp-copy{position:absolute;top:6px;right:6px;border:1px solid var(--line);background:#1a2436;
+       color:#9fb2cf;border-radius:8px;font-size:11px;padding:3px 9px;cursor:pointer}
+  .mp-copy:hover{color:#fff;border-color:#4f8cff}
   .jobs{margin-top:8px;font-size:13px}
   .jobs li{margin:4px 0;color:var(--muted)}
   .hidden{display:none}
@@ -71,8 +83,9 @@
         <input type="text" id="topic" placeholder="예: 카페인의 과학, 아침 운동의 효과, 2026 재테크 트렌드">
       </div>
       <button class="btn" id="genScriptBtn" type="button" style="padding:11px 18px;white-space:nowrap">✨ 대본 생성</button>
+      <button class="btn" id="mediaPromptBtn" type="button" style="padding:11px 18px;white-space:nowrap;background:linear-gradient(135deg,#7b5cff,#5636d6)">🖼️ 미디어 프롬프트</button>
     </div>
-    <div id="genScriptMsg" class="hint" style="margin:6px 0 4px">관리자 프롬프트: <code>admin/script_prompt.txt</code> · LLM 설정: <code>admin/llm.json</code></div>
+    <div id="genScriptMsg" class="hint" style="margin:6px 0 4px">✨ 대본 생성: 주제 → 대본+미디어 프롬프트 · 🖼️ 미디어 프롬프트: 아래 대본(직접 입력/외부 AI) → 씬별 이미지·영상 프롬프트 · 템플릿: <code>admin/*_prompt.txt</code></div>
 
     <label for="script">📝 대본 (빈 줄로 씬 구분 = 미디어 1개)</label>
     <textarea id="script" name="script" placeholder="커피 한 잔이 당신의 하루를 바꾼다면 믿으시겠습니까?
@@ -88,6 +101,7 @@
 
     <label for="bgm">🎵 BGM 업로드 (선택)</label>
     <input type="file" id="bgm" name="bgm" accept="audio/*">
+    <input type="hidden" id="media_prompts_json" name="media_prompts_json" value="">
 
     <div class="grid">
       <div>
@@ -161,6 +175,17 @@
       <button class="btn" id="submitBtn" type="submit">🎬 영상 생성</button>
     </div>
   </form>
+
+  <div id="mediaCard" class="card hidden">
+    <div class="row" style="justify-content:space-between">
+      <label style="margin:0">🖼️ AI 미디어 프롬프트 — 복사해서 영상/이미지 생성 툴에서 사용</label>
+      <div class="row" style="gap:8px">
+        <button class="btn" id="copyAllBtn" type="button" style="padding:8px 14px;font-size:13px">📋 전체 복사</button>
+        <button class="btn" id="dlPromptsBtn" type="button" style="padding:8px 14px;font-size:13px;background:linear-gradient(135deg,#3aa7ff,#2163c9)">⬇️ TXT 다운로드</button>
+      </div>
+    </div>
+    <div id="mediaList" style="margin-top:12px"></div>
+  </div>
 
   <div id="jobCard" class="card hidden">
     <div class="row">
@@ -262,11 +287,104 @@ genScriptBtn.addEventListener('click', async () => {
     const d = await r.json();
     if (!r.ok) { genScriptMsg.textContent = '❌ ' + (d.error || '대본 생성 실패'); return; }
     document.getElementById('script').value = d.script;
-    genScriptMsg.textContent = `✅ 대본 ${d.scenes}씬 생성 완료 — 검토·수정 후 아래에서 미디어를 올리세요.`;
+    const hasPrompts = (d.media_prompts || []).some(s => s.image_prompt || s.video_prompt);
+    genScriptMsg.textContent = `✅ 대본 ${d.scenes}씬 생성 완료` +
+      (hasPrompts ? ' — 미디어 프롬프트도 아래에 준비됐습니다.' : ' — 검토·수정 후 미디어를 올리세요.');
+    renderMediaPrompts(d.media_prompts || [], d.prompts_text || '');
   } catch (e) {
     genScriptMsg.textContent = '❌ 네트워크 오류: ' + e;
   } finally {
     genScriptBtn.disabled = false;
+  }
+});
+
+// ── 미디어 프롬프트 패널 ─────────────────────────────
+const mediaCard = document.getElementById('mediaCard');
+const mediaList = document.getElementById('mediaList');
+let lastPromptsText = '';
+
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function copyText(text, btn) {
+  const done = () => { if (btn) { const t = btn.textContent; btn.textContent = '✓ 복사됨'; setTimeout(() => btn.textContent = t, 1200); } };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta); done();
+}
+
+function renderMediaPrompts(list, promptsText) {
+  lastPromptsText = promptsText || '';
+  document.getElementById('media_prompts_json').value = JSON.stringify(list || []);
+  mediaList.innerHTML = '';
+  if (!list || !list.length) { mediaCard.classList.add('hidden'); return; }
+  const hasAny = list.some(s => s.image_prompt || s.video_prompt);
+  if (!hasAny) {
+    mediaList.innerHTML = '<div class="hint">생성된 시각 프롬프트가 없습니다. (mock 모드이거나 템플릿 JSON 계약 미준수 — admin/scene_pack_prompt.txt 확인)</div>';
+    mediaCard.classList.remove('hidden');
+    return;
+  }
+  list.forEach(sc => {
+    const div = document.createElement('div');
+    div.className = 'mp-scene';
+    div.innerHTML =
+      `<div class="mp-head">씬 ${sc.index + 1}</div>` +
+      `<div class="mp-narr">${escapeHtml(sc.narration)}</div>` +
+      `<div class="mp-box"><span class="mp-tag">이미지</span>` +
+      `<button class="mp-copy" data-copy="img-${sc.index}">복사</button><div>${escapeHtml(sc.image_prompt || '(없음)')}</div></div>` +
+      `<div class="mp-box"><span class="mp-tag video">동영상</span>` +
+      `<button class="mp-copy" data-copy="vid-${sc.index}">복사</button><div>${escapeHtml(sc.video_prompt || '(없음)')}</div></div>`;
+    mediaList.appendChild(div);
+  });
+  mediaList.querySelectorAll('.mp-copy').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const [kind, idx] = btn.dataset.copy.split('-');
+      const sc = list[+idx];
+      copyText(kind === 'img' ? sc.image_prompt : sc.video_prompt, btn);
+    });
+  });
+  mediaCard.classList.remove('hidden');
+}
+
+document.getElementById('copyAllBtn').addEventListener('click', (e) => copyText(lastPromptsText, e.target));
+document.getElementById('dlPromptsBtn').addEventListener('click', () => {
+  if (!lastPromptsText) return;
+  const blob = new Blob([lastPromptsText], {type: 'text/plain;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'media_prompts.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+// 대본 직접 입력(또는 외부 AI 대본 붙여넣기) → 씬별 미디어 프롬프트만 생성
+document.getElementById('mediaPromptBtn').addEventListener('click', async () => {
+  const script = document.getElementById('script').value.trim();
+  if (!script) { genScriptMsg.textContent = '대본 칸에 먼저 대본을 입력하세요.'; return; }
+  const btn = document.getElementById('mediaPromptBtn');
+  btn.disabled = true;
+  genScriptMsg.textContent = '⏳ 씬별 이미지/동영상 프롬프트 생성 중…';
+  try {
+    const r = await fetch('/api/mediaprompts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({script}),
+    });
+    const d = await r.json();
+    if (!r.ok) { genScriptMsg.textContent = '❌ ' + (d.error || '프롬프트 생성 실패'); return; }
+    genScriptMsg.textContent = `✅ ${d.scenes}씬 미디어 프롬프트 완성 — 생성 툴에 붙여넣고 assets/media에 저장하세요.`;
+    renderMediaPrompts(d.media_prompts || [], d.prompts_text || '');
+  } catch (e) {
+    genScriptMsg.textContent = '❌ 네트워크 오류: ' + e;
+  } finally {
+    btn.disabled = false;
   }
 });
 

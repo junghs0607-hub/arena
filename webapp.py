@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import queue
 import re
@@ -30,6 +31,8 @@ from pipeline import scriptgen  # AI 대본 생성(관리자 프롬프트)
 ROOT = Path(__file__).resolve().parent
 JOBS_ROOT = ROOT / "jobs"
 ADMIN_PROMPT = ROOT / "admin" / "script_prompt.txt"
+ADMIN_PACK_PROMPT = ROOT / "admin" / "scene_pack_prompt.txt"
+ADMIN_MEDIA_PROMPT = ROOT / "admin" / "media_prompt.txt"
 ADMIN_LLM = ROOT / "admin" / "llm.json"
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
@@ -237,18 +240,57 @@ def api_scriptgen():
         scenes, duration = 4, 30
     tone = (data.get("tone") or "정보 전달·실용 꿀팁").strip()
 
+    media_lang = (data.get("media_lang") or "English").strip()
     try:
-        text = scriptgen.generate_script(
+        pack = scriptgen.generate_scene_pack(
             topic, scenes=scenes, duration=duration, tone=tone,
-            prompt_path=ADMIN_PROMPT, llm_path=ADMIN_LLM,
+            media_lang=media_lang,
+            prompt_path=ADMIN_PACK_PROMPT, llm_path=ADMIN_LLM,
         )
     except scriptgen.ScriptGenError as e:
         return jsonify({"error": str(e)}), 502
     except Exception as e:  # noqa: BLE001
         return jsonify({"error": f"대본 생성 실패: {e}"}), 500
 
-    n_scenes = len([b for b in re.split(r"\n\s*\n", text) if b.strip()])
-    return jsonify({"script": text, "scenes": n_scenes})
+    return jsonify({
+        "script": pack.to_script(),
+        "scenes": len(pack.scenes),
+        "media_prompts": [sc.to_dict() for sc in pack.scenes],
+        "prompts_text": pack.to_prompts_text(),
+    })
+
+
+@app.post("/api/mediaprompts")
+def api_mediaprompts():
+    """완성된 대본(직접 입력/외부 AI) → 씬별 이미지/동영상 프롬프트.
+
+    입력은 빈 줄로 구분된 대본 텍스트. 씬 순서는 그대로 유지된다.
+    """
+    data = request.get_json(silent=True) or request.form
+    script = (data.get("script") or "").strip()
+    if not script:
+        return jsonify({"error": "대본을 입력하세요."}), 400
+    blocks = [b.strip() for b in re.split(r"\n\s*\n", script) if b.strip()]
+    # 씬 낯줄바꿈은 파서 규칙대로 공백 정규화
+    blocks = [re.sub(r"\s*\n\s*", " ", b) for b in blocks]
+    media_lang = (data.get("media_lang") or "English").strip()
+
+    try:
+        prompts = scriptgen.generate_media_prompts(
+            blocks, media_lang=media_lang,
+            prompt_path=ADMIN_MEDIA_PROMPT, llm_path=ADMIN_LLM,
+        )
+    except scriptgen.ScriptGenError as e:
+        return jsonify({"error": str(e)}), 502
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"error": f"프롬프트 생성 실패: {e}"}), 500
+
+    pack = scriptgen.ScenePack(prompts)
+    return jsonify({
+        "scenes": len(prompts),
+        "media_prompts": [sc.to_dict() for sc in prompts],
+        "prompts_text": pack.to_prompts_text(),
+    })
 
 
 @app.post("/api/generate")
@@ -302,6 +344,16 @@ def generate():
         candidates = [p for p in (ROOT / "assets" / "bgm").glob("*") if p.suffix.lower() in AUDIO_EXTS]
         if candidates:
             bgm_path = sorted(candidates)[0]
+
+    # 폼에 미디어 프롬프트(JSON)가 실려 오면 작업 
+    mp_json = (request.form.get("media_prompts_json") or "").strip()
+    if mp_json:
+        try:
+            mp_list = json.loads(mp_json)
+            if isinstance(mp_list, list) and mp_list:
+                (out_dir / "media_prompts.json").write_text(mp_json, encoding="utf-8")
+        except Exception as e:  # noqa: BLE001
+            print(f"[웹][경고] media_prompts_json 저장 실패: {e}", file=sys.stderr)
 
     job = {
         "id": job_id,

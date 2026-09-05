@@ -100,7 +100,9 @@ python webapp.py --host 0.0.0.0 --port 5000
 
 | 파일 | 역할 |
 |---|---|
-| `admin/script_prompt.txt` | 대본 프롬프트 템플릿 — 브랜드 톤/규칙을 자유롭게 수정. 치환 변수: `{topic}` `{scene_count}` `{duration}` `{tone}` |
+| `admin/scene_pack_prompt.txt` | ⭐ 씬 팩 프롬프트 — 주제 → 대본+씬별 이미지/동영상 프롬프트(JSON 계약). 키 이름(`scenes/narration/image_prompt/video_prompt`)은 파서가 찾는 이름이니 바꾸지 마세요 |
+| `admin/media_prompt.txt` | ⭐ 완성된 대본 → 씬별 미디어 프롬프트만(JSON 배열 계약). `image_prompt`/`video_prompt` 키 고정 |
+| `admin/script_prompt.txt` | 대본 전용 레거시 템플릿(기존 호환) — 치환 변수: `{topic}` `{scene_count}` `{duration}` `{tone}` (`{media_lang}` `{scenes}`도 사용 가능) |
 | `admin/llm.json` | LLM 연결 설정. `admin/llm.local.json`(git 미추적)이 있으면 우선 |
 
 **LLM 설정 (`admin/llm.json`)**
@@ -128,6 +130,18 @@ python build.py scriptgen --topic "카페인의 과학" --scenes 4 --duration 30
 
 **웹 UI 사용**: 페이지 상단 "AI 대본 생성" 칸에 주제 입력 → ✨ 대본 생성 → 대본 칸에 자동 입력(검토·수정 가능) → 바로 🎬 영상 생성.
 
+**씬 팩 출력**: `scriptgen` 은 대본 외에 씬별 **이미지/동영상 생성 프롬프트**도 함께 만들어 `<out-dir>/media_prompts.json` + `.txt` 로 저장합니다. 흐름은:
+① 프롬프트 복사 → ② 사용 중인 영상/이미지 생성 AI 도구에 붙여넣어 씬별 미디어 생성 → ③ `assets/media/01_…`, `02_…` 로 저장 → ④ `python build.py all`.
+시각 프롬프트 언어는 `--media-lang English`(기본)로 지정합니다. (웹 UI에서는 씬별 복사 버튼 + 전체 TXT 다운로드 제공)
+
+**완성된 대본(직접 입력/다른 AI) → 프롬프트만**:
+
+```bash
+python build.py mediaprompts --script assets/script.txt
+```
+
+씬 순서 그대로 `media_prompts.(json|txt)` 생성. 웹 UI의 **🖼️ 미디어 프롬프트** 버튼 동일 흐름.
+
 생성된 출력은 자동 정제됩니다(마크다운 펜스/번호·"씬 N:" 접두어 제거, 문장 종결 보정, 씬 블록 검증) — 파서가 못 읽는 형식이면 오류로 알려줍니다.
 
 ---
@@ -136,6 +150,8 @@ python build.py scriptgen --topic "카페인의 과학" --scenes 4 --duration 30
 
 | 단계 | 명령 | 하는 일 | 산출물 |
 |---|---|---|---|
+| scriptgen | `python build.py scriptgen --topic …` | 주제 → 대본(빈 줄=씬) + 씬별 이미지/동영상 프롬프트 | `script.txt`, `media_prompts.(json\|txt)` |
+| mediaprompts | `python build.py mediaprompts` | 완성 대본 → 씬별 미디어 프롬프트만 | `media_prompts.(json\|txt)` |
 | prepare | `python build.py prepare` | 대본 파싱 + 미디어 수집/매칭/길이 분석 | `work/prep.json` |
 | audio | `python build.py audio` | 씬별 나레이션 TTS 생성 | `work/audio/scene_XX.mp3` |
 | timeline | `python build.py timeline` | 프레임 단위 절대시간 타임라인 + 나레이션 마스터 | `work/timeline.json`, `work/narration_full.wav` |
@@ -264,7 +280,9 @@ assets/narration/scene_01.mp3
 │   ├── narration/           # (선택) 사전 녹음 나레이션 scene_XX.mp3
 │   └── bgm/                 # (선택) 배경음악
 ├── admin/
-│   ├── script_prompt.txt    # ★ 관리자용 AI 대본 프롬프트 템플릿
+│   ├── scene_pack_prompt.txt# ★ 씬 팩(대본+미디어 프롬프트) 템플릿
+│   ├── media_prompt.txt     # ★ 완성 대본 → 미디어 프롬프트 템플릿
+│   ├── script_prompt.txt    # (레거시) 대본 전용 템플릿
 │   └── llm.json             # LLM 연결 설정 (로컬: llm.local.json)
 ├── work/                    # 중간 산출물(자동, git 무시)
 └── output/                  # final.mp4 + subtitles.srt

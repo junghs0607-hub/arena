@@ -263,6 +263,84 @@ def test_qwen_base_model_requires_ref_audio():
             _nar._qwen_cache.clear()
 
 
+# ── 씬 팩(대본 + 미디어 프롬프트) ────────────────────────
+
+def test_parse_scene_pack_fenced_json_and_key_variants():
+    raw = (
+        "```json\n"
+        '{"scenes":[{"narration":"훅 문장입니다.","image_prompt":"cinematic coffee, 9:16","video_prompt":"slow dolly in"},'
+        '{"text":"두 번째 씬이 끝납니다","image":"sunrise desk","motion_prompt":"pan right"}]}\n'
+        "```"
+    )
+    pack = sg.parse_scene_pack(raw, expect_scenes=2)
+    assert len(pack.scenes) == 2
+    assert pack.scenes[0].narration == "훅 문장입니다."
+    assert "coffee" in pack.scenes[0].image_prompt
+    # 키 변형(text/image/motion_prompt) 흡수 + 종결부호 보정
+    assert pack.scenes[1].narration.endswith(".")
+    assert pack.scenes[1].image_prompt == "sunrise desk"
+    assert pack.scenes[1].video_prompt == "pan right"
+
+
+def test_parse_scene_pack_falls_back_to_prose():
+    raw = "훅 문장입니다. 둘째 문장.\n\n본문 씬입니다."
+    pack = sg.parse_scene_pack(raw)  # JSON 없음 → 대본만, 시각 프롬프트는 빈칸
+    assert len(pack.scenes) == 2
+    assert pack.scenes[0].image_prompt == "" and pack.scenes[0].video_prompt == ""
+    assert len(pack.to_script().split("\n\n")) == 2
+
+
+def test_generate_scene_pack_with_fake_llm():
+    import json as _json
+
+    orig_call = sg.call_llm
+    fake_json = _json.dumps(
+        {"scenes": [
+            {"narration": "문장 하나.", "image_prompt": "img-one", "video_prompt": "vid-one"},
+            {"narration": "문장 둘", "image_prompt": "img-two", "video_prompt": "vid-two"},
+        ]}, ensure_ascii=False)
+    sg.call_llm = lambda prompt, cfg: fake_json
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            pack = sg.generate_scene_pack(
+                "테스트 주제", scenes=2, duration=20,
+                prompt_path=_write(d / "p.txt", "주제: {topic}, 씬 {scene_count}개"),
+                llm_path=_write(d / "l.json", '{"provider": "mock", "model": "x"}'),
+            )
+            j, t = sg.save_scene_pack(pack, d / "media_prompts")
+            script = sg.parse_scene_pack(fake_json).to_script()
+            scenes = parse_script(_write(d / "s.txt", script))
+            assert len(pack.scenes) == 2
+            assert pack.scenes[1].narration.endswith(".")
+            assert j.exists() and t.exists()
+            assert "img-one" in t.read_text(encoding="utf-8")
+            assert len(scenes) == 2  # 대본은 그대로 파이프라인 입력 형식
+    finally:
+        sg.call_llm = orig_call
+
+
+def test_generate_media_prompts_aligns_with_input_scenes():
+    orig_call = sg.call_llm
+    sg.call_llm = lambda prompt, cfg: (
+        '[{"image_prompt": "i1", "video_prompt": "v1"},'
+        ' {"image_prompt": "i2", "video_prompt": "v2"}]'
+    )
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            outs = sg.generate_media_prompts(
+                ["A 문장입니다.", "B 문장입니다."],
+                prompt_path=_write(d / "m.txt", "대본:\n{scenes}\n(씬 {scene_count}개)"),
+                llm_path=_write(d / "l.json", '{"provider": "mock", "model": "x"}'),
+            )
+        assert [o.narration for o in outs] == ["A 문장입니다.", "B 문장입니다."]
+        assert outs[0].image_prompt == "i1" and outs[0].video_prompt == "v1"
+        assert outs[1].image_prompt == "i2"
+    finally:
+        sg.call_llm = orig_call
+
+
 # ── 직접 실행 지원 ─────────────────────────────────────
 
 if __name__ == "__main__":

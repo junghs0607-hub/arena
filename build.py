@@ -37,25 +37,61 @@ from pipeline import scriptgen as sg
 # ── AI 대본 생성 (관리자 프롬프트 + 주제) ────────────────
 
 def stage_scriptgen(args: argparse.Namespace) -> None:
+    """주제 → 씬 팩(대본 + 이미지/동영상 프롬프트) 생성."""
     if not args.topic:
         fail("`--topic \"주제\"`를 입력하세요.")
     try:
-        text = sg.generate_script(
+        pack = sg.generate_scene_pack(
             args.topic,
             scenes=args.scenes,
             duration=args.duration,
             tone=args.tone,
-            prompt_path=args.prompt_file,
+            media_lang=args.media_lang,
+            prompt_path=args.pack_prompt_file,
             llm_path=args.llm_config,
         )
     except sg.ScriptGenError as e:
         fail(str(e))
         return
-    sg.save_script(text, args.script)
+    script_text = pack.to_script()
+    sg.save_script(script_text, args.script)
+    prompts_prefix = Path(args.out_dir) / "media_prompts"
+    sg.save_scene_pack(pack, prompts_prefix)
+
     print("\n──────── 생성된 대본 미리보기 ────────")
-    print(text)
+    print(script_text)
+    print("──────── 시각 프롬프트(씬 1 예시) ────────")
+    first = pack.scenes[0]
+    print(f"[이미지] {first.image_prompt or '(없음)'}")
+    print(f"[영상] {first.video_prompt or '(없음)'}")
     print("─────────────────────────────────────")
-    log(f"이제 `python build.py all` 로 영상을 조립하세요. (대본: {args.script})")
+    log(f"영상/이미지 생성 툴에서 미디어 생성 → {args.media_dir} 에 넣은 뒤 `python build.py all`")
+    log(f"전체 프롬프트: {prompts_prefix.with_suffix('.txt')}")
+
+
+def stage_mediaprompts(args: argparse.Namespace) -> None:
+    """완성된 대본(직접 입력/외부 AI) → 씬별 이미지/동영상 프롬프트."""
+    from pipeline.script_parser import parse_script
+
+    scenes = parse_script(Path(args.script))
+    if not scenes:
+        fail(f"대본이 비어 있습니다: {args.script}")
+    texts = [sc.text for sc in scenes]
+    try:
+        prompts = sg.generate_media_prompts(
+            texts,
+            media_lang=args.media_lang,
+            prompt_path=args.media_prompt_file,
+            llm_path=args.llm_config,
+        )
+    except sg.ScriptGenError as e:
+        fail(str(e))
+        return
+    pack = sg.ScenePack(prompts)
+    prompts_prefix = Path(args.out_dir) / "media_prompts"
+    sg.save_scene_pack(pack, prompts_prefix)
+    print(pack.to_prompts_text())
+    log(f"전체 프롬프트: {prompts_prefix.with_suffix('.txt')}")
 
 
 # ── 단계 구현 ──────────────────────────────────────────
@@ -157,8 +193,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="반자동 쇼츠 조립 시스템",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("stage", choices=["prepare", "audio", "timeline", "subs", "base", "overlay", "mux", "all", "scriptgen"],
-                   help="scriptgen: 관리자 프롬프트로 AI 대본 생성")
+    p.add_argument("stage", choices=["prepare", "audio", "timeline", "subs", "base", "overlay", "mux", "all", "scriptgen", "mediaprompts"],
+                   help="scriptgen: 주제→대본+미디어프롬프트 / mediaprompts: 기존 대본→미디어프롬프트")
     p.add_argument("--script", default="assets/script.txt", help="대본(txt). 빈 줄로 씬 구분 (scriptgen 출력 경로 겸용)")
     p.add_argument("--media-dir", default="assets/media", help="생성한 이미지/비디오 폴더")
     p.add_argument("--work-dir", default="work", help="중간 산출물 폴더")
@@ -196,7 +232,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scenes", type=int, default=4, help="씬 개수")
     p.add_argument("--duration", type=int, default=30, help="목표 낭독 초")
     p.add_argument("--tone", default="정보 전달·실용 꿀팁", help="톤/장르 지시")
-    p.add_argument("--prompt-file", default="admin/script_prompt.txt", help="관리자 프롬프트 템플릿")
+    p.add_argument("--prompt-file", default="admin/script_prompt.txt", help="관리자 프롬프트 템플릿(대본 전용 레거시)")
+    p.add_argument("--pack-prompt-file", default="admin/scene_pack_prompt.txt", help="씬 팩(대본+시각프롬프트) 템플릿")
+    p.add_argument("--media-prompt-file", default="admin/media_prompt.txt", help="미디어 프롬프트 전용 템플릿")
+    p.add_argument("--media-lang", default="English", help="이미지/영상 프롬프트 언어")
     p.add_argument("--llm-config", default="admin/llm.json", help="LLM 연결 설정 JSON")
     return p
 
@@ -241,6 +280,9 @@ def main() -> None:
     args = build_parser().parse_args()
     if args.stage == "scriptgen":
         stage_scriptgen(args)
+        return
+    if args.stage == "mediaprompts":
+        stage_mediaprompts(args)
         return
     s = make_settings(args)
     stages = {
