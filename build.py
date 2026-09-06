@@ -186,6 +186,31 @@ def stage_all(s: Settings) -> None:
     log(f"🎬 완료: {s.final_path}")
 
 
+def stage_preview(s: Settings, *, font: str | None = None, crf: int = 30) -> Path:
+    """자막·영상·나레이션 합성 미리보기 (저해상도 권장 실행: --width 540 --height 960).
+
+    전체 영상과 달리 Remotion 오버레이 없이 FFmpeg가 자막을 직접 태워 넣는다.
+    확인 후 수정(스크립트/미디어/스타일) → 최종엔 `all` 로 Remotion 오버레이 렌더.
+    """
+    from pipeline import preview as pv
+
+    steps: list[tuple[str, callable]] = [
+        ("prepare — 대본 파싱 + 미디어 매칭", lambda: stage_prepare(s)),
+        ("audio — 나레이션", lambda: stage_audio(s)),
+        ("timeline — 타임라인 + 나레이션 마스터", lambda: stage_timeline(s)),
+        ("subs — 자막 타이밍", lambda: stage_subs(s)),
+        ("base — 베이스 영상 조립 (미리보기 해상도)", lambda: stage_base(s)),
+        ("preview — 자막 번인 + 나레이션 먹스", lambda: pv.run_preview(
+            tl.load_timeline(s), s, font=font, crf=crf)),
+    ]
+    for i, (label, fn) in enumerate(steps, 1):
+        log(f"━━ {i}/{len(steps)} {label} ━━")
+        fn()
+    out = s.out_dir / "preview.mp4"
+    log(f"👀 미리보기 완료: {out}")
+    return out
+
+
 # ── CLI ────────────────────────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
@@ -193,8 +218,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="반자동 쇼츠 조립 시스템",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("stage", choices=["prepare", "audio", "timeline", "subs", "base", "overlay", "mux", "all", "scriptgen", "mediaprompts"],
-                   help="scriptgen: 주제→대본+미디어프롬프트 / mediaprompts: 기존 대본→미디어프롬프트")
+    p.add_argument("stage", choices=["prepare", "audio", "timeline", "subs", "base", "overlay", "mux", "all", "preview", "scriptgen", "mediaprompts"],
+                   help="preview: 자막·영상·나레이션 합성 미리보기 / scriptgen: 주제→대본+미디어프롬프트 / mediaprompts: 기존 대본→미디어프롬프트")
     p.add_argument("--script", default="assets/script.txt", help="대본(txt). 빈 줄로 씬 구분 (scriptgen 출력 경로 겸용)")
     p.add_argument("--media-dir", default="assets/media", help="생성한 이미지/비디오 폴더")
     p.add_argument("--work-dir", default="work", help="중간 산출물 폴더")
@@ -227,6 +252,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--fps", type=int, default=30)
     p.add_argument("--width", type=int, default=1080)
     p.add_argument("--height", type=int, default=1920)
+    # ── 미리보기(preview) ──
+    p.add_argument("--subtitle-font", default=None, help="자막 폰트(.ttf/otf/ttc). 생략 시 assets/fonts 자동 탐색")
+    p.add_argument("--preview-crf", type=int, default=30, help="미리보기 화질 (작을수록 고화질, 28~35 권장)")
     # ── AI 대본 생성(scriptgen) ──
     p.add_argument("--topic", default=None, help="대본 주제 (scriptgen 전용)")
     p.add_argument("--scenes", type=int, default=4, help="씬 개수")
@@ -294,6 +322,7 @@ def main() -> None:
         "overlay": lambda: stage_overlay(s),
         "mux": lambda: stage_mux(s),
         "all": lambda: stage_all(s),
+        "preview": lambda: stage_preview(s, font=args.subtitle_font, crf=args.preview_crf),
     }
     stages[args.stage]()
 

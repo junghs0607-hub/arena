@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>관리자 로그인 — 쇼츠 스튜디오</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+       font-family:-apple-system,BlinkMacSystemFont,'Pretendard','Malgun Gothic',sans-serif;
+       background:radial-gradient(1200px 800px at 70% 20%,#1b2440 0%,#0b0f16 60%);color:#e7ecf4}
+  .card{width:min(400px,92vw);background:#131a26;border:1px solid #243049;border-radius:18px;padding:30px 28px}
+  h1{margin:0 0 6px;font-size:20px}
+  .sub{color:#9fb2cf;font-size:13px;margin-bottom:20px}
+  label{display:block;font-size:13px;font-weight:700;margin:14px 0 6px;color:#b9c7e2}
+  input{width:100%;box-sizing:border-box;background:#0d1320;border:1px solid #263350;border-radius:10px;
+        padding:11px 13px;color:#e7ecf4;font-size:14px}
+  input:focus{outline:none;border-color:#4f8cff}
+  .btn{margin-top:20px;width:100%;border:0;border-radius:12px;padding:13px;font-size:15px;font-weight:800;
+       background:linear-gradient(135deg,#4f8cff,#7b5cff);color:#fff;cursor:pointer}
+  .err{background:#2c1420;border:1px solid #57222f;color:#ffb3bd;border-radius:10px;
+       padding:10px 12px;margin-bottom:14px;font-size:13px}
+  .link{display:block;text-align:center;margin-top:16px;color:#7aa5ff;font-size:13px;text-decoration:none}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>{{ "🔐 관리자 초기 설정" if need_setup else "🔐 관리자 로그인" }}</h1>
+    <div class="sub">
+      {{ "첫 실행 — 스튜디오를 보호할 관리자 계정을 만듭니다 (SQLite: data/settings.db)" if need_setup
+         else "쇼츠 스튜디오 관리자 계정으로 로그인하세요." }}
+    </div>
+    {% if error %}<div class="err">❌ {{ error }}</div>{% endif %}
+    <form method="post">
+      <input type="hidden" name="next" value="{{ next }}">
+      <input type="hidden" name="mode" value="{{ 'setup' if need_setup else 'login' }}">
+      <label for="username">사용자 이름</label>
+      <input id="username" name="username" required autocomplete="username" placeholder="admin">
+      <label for="password">비밀번호 (6자 이상)</label>
+      <input id="password" name="password" type="password" required minlength="6" autocomplete="{{ 'new-password' if need_setup else 'current-password' }}">
+      {% if need_setup %}
+      <label for="password2">비밀번호 확인</label>
+      <input id="password2" name="password2" type="password" required minlength="6" autocomplete="new-password">
+      {% endif %}
+      <button class="btn" type="submit">{{ "계정 만들고 시작" if need_setup else "로그인" }}</button>
+    </form>
+    <a class="link" href="/">← 스튜디오로 돌아가기</a>
+  </div>
+</body>
+</html>

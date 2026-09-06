@@ -341,8 +341,86 @@ def test_generate_media_prompts_aligns_with_input_scenes():
         sg.call_llm = orig_call
 
 
-# ── 직접 실행 지원 ─────────────────────────────────────
+# ── SQLite 설정 스토어 / 미리보기 ───────────────────────
 
+def test_settings_store_set_get_section_delete():
+    from pipeline import settings_store as ss
+
+    with tempfile.TemporaryDirectory() as d:
+        db = Path(d) / "s.db"
+        ss.set(db, "llm.provider", "mock")
+        ss.set(db, "llm.temperature", 0.7)     # JSON 타입 보존
+        ss.set(db, "studio.voice", "Sohee")
+        assert ss.get(db, "llm.provider") == "mock"
+        assert ss.get(db, "llm.temperature") == 0.7
+        assert ss.get(db, "missing", "기본") == "기본"
+        sec = ss.get_section(db, "llm")
+        assert sec["provider"] == "mock" and sec["temperature"] == 0.7
+        ss.delete(db, "studio.voice")
+        assert ss.get(db, "studio.voice") is None
+        # 시크릿 자동 생성+재사용
+        a = ss.get_or_create_secret(db)
+        assert ss.get_or_create_secret(db) == a and len(a) >= 32
+
+
+def test_settings_store_admin_password_flow():
+    from pipeline import settings_store as ss
+
+    with tempfile.TemporaryDirectory() as d:
+        db = Path(d) / "s.db"
+        assert ss.admin_count(db) == 0
+        ss.create_admin(db, "admin", "secret1")
+        assert ss.admin_count(db) == 1
+        assert ss.verify_admin(db, "admin", "secret1")
+        assert not ss.verify_admin(db, "admin", "wrong")
+        assert not ss.verify_admin(db, "nobody", "secret1")
+        ss.change_password(db, "admin", "newpass99")
+        assert ss.verify_admin(db, "admin", "newpass99")
+        assert not ss.verify_admin(db, "admin", "secret1")
+        try:
+            ss.create_admin(db, "admin", "123")   # 6자 미만 거부
+            raise AssertionError("짧은 비밀번호가 통과됨")
+        except ValueError:
+            pass
+
+
+def test_scriptgen_llm_overrides_merge():
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        cfg = _write(d / "llm.json",
+                     '{"provider": "mock", "model": "a", "temperature": 0.2}')
+        merged = sg._effective_llm_config(cfg, {"model": "b", "base_url": "http://x", "provider": "openai-compatible"})
+        assert merged["model"] == "b" and merged["base_url"] == "http://x"
+        assert merged["provider"] == "openai-compatible"
+        assert merged["temperature"] == 0.2   # 오버라이드 미지정 → 기존값 유지
+        cleaned = sg._effective_llm_config(cfg, {"model": "", "base_url": None})  # 빈 값은 무시
+        assert cleaned["model"] == "a"
+
+
+def test_preview_font_and_audio_graph_helpers():
+    from pipeline import preview as pv
+
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        f = _write(d / "Font.ttf", "FAKE-TTF-BYTES")
+        assert pv.resolve_subtitle_font(f) == Path(f)          # 명시 경로 우선
+        # 경로 이스케이프(콜론/따옴표)
+        esc = pv._vf_unquote_path(d / "a:b'c / f.srt")
+        assert "\\:" in esc and "\\'" in esc
+    # 오디오 그래프: BGM 없음 → anull, BGM+덕킹 → sidechaincompress
+    class _S:  # 최소 Settings 모사
+        bgm_path = None; bgm_volume = 0.2; duck_bgm = True
+        bgm = None
+    g, label = pv._audio_graph(_S(), 5.0, 1, None)
+    assert "anull" in g and label == "a"
+    class _S2:
+        bgm_path = "/tmp/bgm.mp3"; bgm_volume = 0.2; duck_bgm = True
+        bgm = "/tmp/bgm.mp3"
+    g2, _ = pv._audio_graph(_S2(), 5.0, 1, 2)
+    assert "sidechaincompress" in g2 and "volume=0.200" in g2
+
+
+# ── 직접 실행 지원 ─────────────────────────────────────
 if __name__ == "__main__":
     fns = [(k, v) for k, v in globals().items() if k.startswith("test_")]
     failed = 0

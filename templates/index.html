@@ -52,6 +52,8 @@
   .dl.srt{background:#233046;color:#dbe6f5}
   .err{background:#2c1420;border:1px solid #57222f;color:#ffb3bd;border-radius:12px;
        padding:12px 14px;margin-top:14px;font-size:13px}
+  .adminlink{color:#7aa5ff;text-decoration:none;font-size:13px;font-weight:600}
+  .adminlink:hover{text-decoration:underline}
   .mp-scene{background:var(--card2);border:1px solid var(--line);border-radius:12px;
        padding:14px;margin:10px 0}
   .mp-head{font-size:13px;font-weight:800;color:#9cc3ff;margin-bottom:6px}
@@ -73,6 +75,9 @@
 </head>
 <body>
 <div class="wrap">
+  <div style="text-align:right;margin-bottom:8px">
+    {% if logged_in %}<a href="/admin" class="adminlink">🔧 관리자 설정</a>{% else %}<a href="/admin/login" class="adminlink">🔐 관리자 로그인</a>{% endif %}
+  </div>
   <h1>🎬 반자동 쇼츠 조립 시스템</h1>
   <div class="sub">대본만 붙여 넣으면 나레이션 → 자막 → 그래픽 → 최종 영상까지 자동 조립 (9:16, 1080×1920)</div>
 
@@ -108,7 +113,7 @@
         <label for="voice">🎙️ 나레이션 음성</label>
         <select id="voice" name="voice">
           {% for v, label in voices %}
-          <option value="{{ v }}">{{ label }}</option>
+          <option value="{{ v }}" {% if defaults.voice == v %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
       </div>
@@ -116,7 +121,7 @@
         <label for="rate">말하기 속도</label>
         <select id="rate" name="rate">
           {% for r in rates %}
-          <option value="{{ r }}" {% if r == "+6%" %}selected{% endif %}>{{ r }}</option>
+          <option value="{{ r }}" {% if (defaults.rate or "+6%") == r %}selected{% endif %}>{{ r }}</option>
           {% endfor %}
         </select>
       </div>
@@ -124,23 +129,23 @@
         <label for="whisper_model">Whisper 모델</label>
         <select id="whisper_model" name="whisper_model">
           {% for m in whisper_models %}
-          <option value="{{ m }}" {% if m == "base" %}selected{% endif %}>{{ m }}</option>
+          <option value="{{ m }}" {% if (defaults.whisper_model or "base") == m %}selected{% endif %}>{{ m }}</option>
           {% endfor %}
         </select>
       </div>
       <div>
         <label for="watermark">워터마크 (선택)</label>
-        <input type="text" id="watermark" name="watermark" placeholder="@mychannel">
+        <input type="text" id="watermark" name="watermark" placeholder="@mychannel" value="{{ defaults.watermark or '' }}">
       </div>
       <div>
         <label for="padding">씬 끝 여백(초)</label>
-        <input type="number" id="padding" name="padding" value="0.4" min="0" max="2" step="0.1">
+        <input type="number" id="padding" name="padding" value="{{ defaults.padding or '0.4' }}" min="0" max="2" step="0.1">
       </div>
       <div>
         <label for="tts_backend">🔊 TTS 엔진</label>
         <select id="tts_backend" name="tts_backend">
           {% for v, label in tts_engines %}
-          <option value="{{ v }}">{{ label }}</option>
+          <option value="{{ v }}" {% if defaults.tts_backend == v %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
       </div>
@@ -148,13 +153,13 @@
         <label for="qwen_speaker">Qwen 스피커</label>
         <select id="qwen_speaker" name="qwen_speaker">
           {% for v, label in qwen_speakers %}
-          <option value="{{ v }}">{{ label }}</option>
+          <option value="{{ v }}" {% if defaults.qwen_speaker == v %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
       </div>
       <div>
         <label for="qwen_instruct">Qwen 톤 지시 (선택)</label>
-        <input type="text" id="qwen_instruct" name="qwen_instruct" placeholder="예: 차분하고 신뢰감 있는 낭독">
+        <input type="text" id="qwen_instruct" name="qwen_instruct" placeholder="예: 차분하고 신뢰감 있는 낭독" value="{{ defaults.qwen_instruct or '' }}">
       </div>
       <div>
         <label for="qwen_model">Qwen 모델 (고급)</label>
@@ -171,8 +176,33 @@
       <label class="chk"><input type="checkbox" name="use_server_bgm" value="1"> 서버 기본 BGM 사용</label>
     </div>
 
-    <div style="margin-top:20px">
+    <div style="margin-top:22px;padding-top:18px;border-top:1px dashed var(--line)">
+      <label style="margin-top:0">👀 합성 미리보기 — 자막·영상·나레이션을 저해상도로 빠르게 조립해 확인</label>
+      <div class="grid" style="margin-bottom:6px">
+        <div>
+          <label for="pv_width">미리보기 가로(px)</label>
+          <input type="number" id="pv_width" name="pv_width" value="540" min="180" max="1080" step="2">
+        </div>
+        <div>
+          <label for="pv_height">미리보기 세로(px)</label>
+          <input type="number" id="pv_height" name="pv_height" value="960" min="320" max="1920" step="2">
+        </div>
+        <div>
+          <label for="pv_fps">미리보기 FPS</label>
+          <input type="number" id="pv_fps" name="pv_fps" value="24" min="12" max="60">
+        </div>
+        <div>
+          <label for="subtitle_font">자막 폰트(.ttf, 선택)</label>
+          <input type="file" id="subtitle_font" name="subtitle_font" accept=".ttf,.otf,.ttc">
+        </div>
+      </div>
+      <div class="hint">미리보기는 FFmpeg가 자막을 태워 넣어(번인) 스타일·싱크를 확인하는 용도 — 원본 Remotion 오버레이 배치와 근사치로 같고, 완성 렌더는 🎬 영상 생성(Remotion 오버레이)으로. 워터마크만 번인에도 반영됩니다.</div>
+    </div>
+
+    <input type="hidden" id="job_mode" name="job_mode" value="final">
+    <div style="margin-top:20px;display:flex;gap:12px">
       <button class="btn" id="submitBtn" type="submit">🎬 영상 생성</button>
+      <button class="btn" id="previewBtn" type="button" style="background:linear-gradient(135deg,#2aa198,#1d7a72)">👀 합성 미리보기</button>
     </div>
   </form>
 
@@ -196,8 +226,13 @@
     <div id="jobStage" class="stage" style="margin-top:8px"></div>
     <div id="jobErr" class="err hidden"></div>
     <div id="logBox" class="logbox"></div>
+    <div id="previewBox" class="hidden" style="margin-top:14px">
+      <label style="margin:0 0 8px">👀 합성 미리보기 (자막·영상·나레이션)</label>
+      <video id="previewPlayer" controls playsinline style="width:min(320px,100%);border-radius:16px;border:1px solid var(--line);background:#000"></video>
+    </div>
     <div id="doneLinks" class="done-links hidden">
       <a id="dlVideo" class="dl video" href="#">⬇️ final.mp4 다운로드</a>
+      <a id="dlPreview" class="dl video hidden" href="#" style="background:linear-gradient(135deg,#2aa198,#1d7a72)">⬇️ preview.mp4 다운로드</a>
       <a id="dlSrt" class="dl srt" href="#">⬇️ subtitles.srt</a>
     </div>
   </div>
@@ -221,15 +256,18 @@ const doneLinks = document.getElementById('doneLinks');
 const dlVideo = document.getElementById('dlVideo');
 const dlSrt = document.getElementById('dlSrt');
 const submitBtn = document.getElementById('submitBtn');
+const previewBox = document.getElementById('previewBox');
+const previewPlayer = document.getElementById('previewPlayer');
+const dlPreview = document.getElementById('dlPreview');
 const genScriptBtn = document.getElementById('genScriptBtn');
 const genScriptMsg = document.getElementById('genScriptMsg');
 
 const STATUS_LABEL = {queued:'대기', running:'실행 중', done:'완료', error:'오류'};
 let poller = null;
 
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  submitBtn.disabled = true;
+async function submitJob(mode) {
+  document.getElementById('job_mode').value = mode;
+  submitBtn.disabled = true; previewBtnBtn.disabled = true;
   const fd = new FormData(form);
   try {
     const res = await fetch('/api/generate', {method: 'POST', body: fd});
@@ -237,12 +275,16 @@ form.addEventListener('submit', async (e) => {
     if (!res.ok) { alert(data.error || '생성 요청 실패'); return; }
     jobCard.classList.remove('hidden');
     doneLinks.classList.add('hidden');
+    previewBox.classList.add('hidden');
     errBox.classList.add('hidden');
     watch(data.job_id);
   } finally {
-    submitBtn.disabled = false;
+    submitBtn.disabled = false; previewBtnBtn.disabled = false;
   }
-});
+}
+form.addEventListener('submit', (e) => { e.preventDefault(); submitJob('final'); });
+const previewBtnBtn = document.getElementById('previewBtn');
+previewBtnBtn.addEventListener('click', () => submitJob('preview'));
 
 function watch(jobId) {
   if (poller) clearInterval(poller);
@@ -265,6 +307,15 @@ function watch(jobId) {
     if (j.status === 'done') {
       dlVideo.href = '/api/download/' + jobId + '/video';
       dlSrt.href = '/api/download/' + jobId + '/srt';
+      dlVideo.classList.toggle('hidden', !(j.outputs && j.outputs.video));
+      dlSrt.classList.toggle('hidden', !(j.outputs && j.outputs.srt));
+      if (j.outputs && j.outputs.preview) {
+        const url = '/api/download/' + jobId + '/preview';
+        previewPlayer.src = url;
+        previewBox.classList.remove('hidden');
+        dlPreview.href = url; dlPreview.classList.remove('hidden');
+        previewPlayer.play().catch(() => {});
+      }
       doneLinks.classList.remove('hidden');
       clearInterval(poller); poller = null; refreshJobs();
     }
@@ -397,12 +448,15 @@ async function refreshJobs() {
     (data.jobs || []).forEach(j => {
       const li = document.createElement('li');
       const label = STATUS_LABEL[j.status] || j.status;
-      li.textContent = `[${j.created_at}] ${label} — ${j.script_preview || ''}`;
+      const modeTag = j.mode === 'preview' ? '👀미리보기 ' : '';
+      li.textContent = `[${j.created_at}] ${modeTag}${label} — ${j.script_preview || ''}`;
       if (j.status === 'done') {
+        const kind = j.outputs && j.outputs.preview ? 'preview' : 'video';
         const a = document.createElement('a');
-        a.href = '/api/download/' + j.id + '/video';
-        a.textContent = '  ⬇️ 다운로드';
+        a.href = '/api/download/' + j.id + '/' + kind;
+        a.textContent = kind === 'preview' ? '  👀 미리보기 재생' : '  ⬇️ 다운로드';
         a.style.color = '#5fe3a8';
+        if (kind === 'preview') a.target = '_blank';
         li.appendChild(a);
       }
       ul.appendChild(li);

@@ -381,6 +381,30 @@ def parse_scene_pack(raw: str, expect_scenes: int | None = None) -> ScenePack:
     return ScenePack(scenes)
 
 
+def _effective_template(prompt_path: Path | str, template_text: str | None) -> str:
+    """DB에 저장된 템플릿(우선) 또는 파일 템플릿 로드."""
+    if template_text and template_text.strip():
+        return template_text
+    return load_prompt_template(prompt_path)
+
+
+_LLM_OVERRIDE_KEYS = (
+    "provider", "model", "base_url", "api_key_env", "api_key",
+    "temperature", "max_tokens", "timeout_s", "extra_headers",
+)
+
+
+def _effective_llm_config(llm_path: Path | str | None, overrides: dict | None) -> dict:
+    """llm.json(→llm.local.json) 위에 관리자 DB 설정을 얹는다."""
+    cfg = load_llm_config(llm_path)
+    if overrides:
+        for k in _LLM_OVERRIDE_KEYS:
+            v = overrides.get(k)
+            if v not in (None, ""):
+                cfg[k] = v
+    return cfg
+
+
 def generate_scene_pack(
     topic: str,
     *,
@@ -390,12 +414,14 @@ def generate_scene_pack(
     media_lang: str = "English",
     prompt_path: Path | str,
     llm_path: Path | str | None = None,
+    llm_overrides: dict | None = None,
+    template_text: str | None = None,
 ) -> ScenePack:
     """주제 → (대본 + 이미지/동영상 프롬프트) 씬 팩."""
     if not topic.strip():
         raise ScriptGenError("주제가 비어 있습니다.")
-    cfg = load_llm_config(llm_path)
-    template = load_prompt_template(prompt_path)
+    cfg = _effective_llm_config(llm_path, llm_overrides)
+    template = _effective_template(prompt_path, template_text)
     prompt = build_prompt(
         template, topic=topic, scenes=scenes, duration=duration, tone=tone,
         media_lang=media_lang,
@@ -413,13 +439,15 @@ def generate_media_prompts(
     media_lang: str = "English",
     prompt_path: Path | str,
     llm_path: Path | str | None = None,
+    llm_overrides: dict | None = None,
+    template_text: str | None = None,
 ) -> list[ScenePrompts]:
     """완성된 대본(직접 입력/외부 AI) → 씬별 이미지/동영상 프롬프트."""
     scene_texts = [t.strip() for t in scene_texts if t.strip()]
     if not scene_texts:
         raise ScriptGenError("대본이 비어 있습니다.")
-    cfg = load_llm_config(llm_path)
-    template = load_prompt_template(prompt_path)
+    cfg = _effective_llm_config(llm_path, llm_overrides)
+    template = _effective_template(prompt_path, template_text)
     numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(scene_texts))
     prompt = build_prompt(
         template, topic=scene_texts[0], scenes=len(scene_texts), duration=0,

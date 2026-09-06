@@ -146,12 +146,44 @@ python build.py mediaprompts --script assets/script.txt
 
 ---
 
+## 2-3. 👀 자막·영상·나레이션 합성 미리보기
+
+Remotion 최종 렌더 **전에** 결과물이 어떻게 보이는지 빠르게 확인합니다.
+저해상도(기본 540×960@24)로 FFmpeg가 자막을 직접 태워 넣어(번인) 나레이션과 먹스합니다.
+자막 배치/크기는 Remotion 오버레이(lower-third 안전영역)의 근사값 — 최종 완성본은 Remotion 오버레이를 그대로 사용합니다(침라오케 하이라이트·진행바 등 포함).
+
+**웹 UI**: 폼 아래 **👀 합성 미리보기** 버튼 (해상도·FPS·자막 폰트 지정 가능) → 완료 시 페이지에서 바로 재생, 프리샘은 `preview.mp4` 로 다운로드.
+
+**CLI**:
+
+```bash
+python build.py preview --width 540 --height 960 --fps 24 --no-whisper
+# → output/preview.mp4
+```
+
+- 한국어 자막 폰트: `assets/fonts/*.ttf` 자동 탐색 → 없으면 오픈 라이센스 폰트(나눔바른고딕 Bold) 자동 다운로드(최초 1회, 폰트는 git 무시). `--subtitle-font` 로 직접 지정 가능.
+- 자막 싱크는 최종본과 동일한 타임라인(timeline.json)을 씁니다(Whisper를 켜면 단어 단위까지 동일).
+
+## 2-4. 🔧 SQLite 설정 관리 + 관리자 로그인
+
+모든 운영 설정은 **SQLite 한 파일(`data/settings.db`)** 에 저장됩니다(git 미추적).
+웹 UI 우측 상단 **🔧 관리자** 에서 관리합니다.
+
+- **관리자 계정**: 최초 접속 시 사용자/비밀번호 생성(초기 설정 마법사). 비밀번호는 PBKDF2-SHA256(20만 회) 해시로만 저장. 대시보드에서 변경 가능.
+- **접근 제어**: `스튜디오 전체 로그인 요구` 토글 — 켜면 로그인 없이는 메인 페이지와 생성 API 모두 차단(302/401). 외부 노출 시 켜 두세요.
+- **스튜디오 기본값**: TTS 엔진·음성·Qwen 스피커·톤 지시·워터마크·여백·Whisper 모델 — 메인 화면 폼에 자동 프리필됩니다.
+- **LLM 연결**: provider/base_url/model/temperature 등을 DB로 관리 → `admin/llm.json`(파일) 위에 덮어씀. API 키 자체는 저장하지 않고 환경변수 이름만(`api_key_env`).
+- **프롬프트 템플릿**: 씬 팩/미디어 프롬프트/대본 전용 템플릿을 대시보드에서 직접 편집. 채우면 DB 버전, 비우면 파일 버전으로 동작합니다.
+
+---
+
 ## 3. 파이프라인 단계 (개별 실행 가능)
 
 | 단계 | 명령 | 하는 일 | 산출물 |
 |---|---|---|---|
 | scriptgen | `python build.py scriptgen --topic …` | 주제 → 대본(빈 줄=씬) + 씬별 이미지/동영상 프롬프트 | `script.txt`, `media_prompts.(json\|txt)` |
 | mediaprompts | `python build.py mediaprompts` | 완성 대본 → 씬별 미디어 프롬프트만 | `media_prompts.(json\|txt)` |
+| preview | `python build.py preview` | 자막 번인 + 나레이션 먹스 미리보기(저해상도) | `preview.mp4` |
 | prepare | `python build.py prepare` | 대본 파싱 + 미디어 수집/매칭/길이 분석 | `work/prep.json` |
 | audio | `python build.py audio` | 씬별 나레이션 TTS 생성 | `work/audio/scene_XX.mp3` |
 | timeline | `python build.py timeline` | 프레임 단위 절대시간 타임라인 + 나레이션 마스터 | `work/timeline.json`, `work/narration_full.wav` |
@@ -284,6 +316,9 @@ assets/narration/scene_01.mp3
 │   ├── media_prompt.txt     # ★ 완성 대본 → 미디어 프롬프트 템플릿
 │   ├── script_prompt.txt    # (레거시) 대본 전용 템플릿
 │   └── llm.json             # LLM 연결 설정 (로컬: llm.local.json)
+├── data/
+│   └── settings.db          # ★ SQLite 설정 스토어 (관리자 계정/기본값/템플릿, git 무시)
+├── assets/fonts/            # 자막 폰트 (없으면 미리보기 시 자동 다운로드, git 무시)
 ├── work/                    # 중간 산출물(자동, git 무시)
 └── output/                  # final.mp4 + subtitles.srt
 ```

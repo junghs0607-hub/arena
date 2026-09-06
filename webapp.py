@@ -22,14 +22,17 @@ import sys
 import threading
 import time
 import uuid
+from functools import wraps
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Flask, jsonify, redirect, render_template, request, send_file, session, url_for
 
 from pipeline import scriptgen  # AI 대본 생성(관리자 프롬프트)
+from pipeline import settings_store as settings_db  # SQLite 설정/관리자 스토어
 
 ROOT = Path(__file__).resolve().parent
 JOBS_ROOT = ROOT / "jobs"
+DATA_DIR = ROOT / "data"
 ADMIN_PROMPT = ROOT / "admin" / "script_prompt.txt"
 ADMIN_PACK_PROMPT = ROOT / "admin" / "scene_pack_prompt.txt"
 ADMIN_MEDIA_PROMPT = ROOT / "admin" / "media_prompt.txt"
@@ -104,6 +107,7 @@ def job_public(job: dict) -> dict:
     return {
         "id": job["id"],
         "status": job["status"],          # queued|running|done|error
+        "mode": job.get("mode", "final"),  # final|preview
         "stage": job.get("stage"),
         "stage_label": job.get("stage_label"),
         "progress": job.get("progress", 0),
@@ -129,7 +133,12 @@ def run_stage(job: dict, stage: str) -> None:
         "--whisper-model", job["whisper_model"],
         "--watermark", job["watermark"],
         "--padding", str(job["padding"]),
+        "--width", str(job.get("width", 1080)),
+        "--height", str(job.get("height", 1920)),
+        "--fps", str(job.get("fps", 30)),
     ]
+    if job.get("subtitle_font"):
+        cmd += ["--subtitle-font", str(job["subtitle_font"])]
     if job.get("bgm"):
         cmd += ["--bgm", str(job["bgm"])]
     for flag, cli in [
@@ -166,7 +175,11 @@ def run_stage(job: dict, stage: str) -> None:
 
 
 def run_job(job: dict) -> None:
-    stages = [s for s in STAGE_DEFS if not (job.get("no_overlay") and s[0] == "overlay")]
+    preview_mode = job.get("mode") == "preview"
+    if preview_mode:
+        stages = [("preview", "합성 미리보기(자막·영상·나레이션)")]
+    else:
+        stages = [s for s in STAGE_DEFS if not (job.get("no_overlay") and s[0] == "overlay")]
     job["status"] = "running"
     try:
         for i, (key, label) in enumerate(stages, 1):
@@ -174,11 +187,17 @@ def run_job(job: dict) -> None:
             job["log"].append(f"━━ [{i}/{len(stages)}] {label} ({key}) ━━")
             run_stage(job, key)
             job["progress"] = int(i / len(stages) * 100)
-        job["outputs"]["video"] = (job["out_dir"] / "final.mp4").exists()
-        job["outputs"]["srt"] = (job["out_dir"] / "subtitles.srt").exists()
-        job["status"] = "done" if job["outputs"]["video"] else "error"
-        if not job["outputs"]["video"]:
-            job["error"] = "final.mp4가 생성되지 않았습니다."
+        if preview_mode:
+            job["outputs"]["preview"] = (job["out_dir"] / "preview.mp4").exists()
+            job["status"] = "done" if job["outputs"]["preview"] else "error"
+            if not job["outputs"]["preview"]:
+                job["error"] = "preview.mp4가 생성되지 않았습니다."
+        else:
+            job["outputs"]["video"] = (job["out_dir"] / "final.mp4").exists()
+            job["outputs"]["srt"] = (job["out_dir"] / "subtitles.srt").exists()
+            job["status"] = "done" if job["outputs"]["video"] else "error"
+            if not job["outputs"]["video"]:
+                job["error"] = "final.mp4가 생성되지 않았습니다."
     except Exception as e:  # noqa: BLE001
         job["status"] = "error"
         job["error"] = str(e)
@@ -219,6 +238,8 @@ def index():
         whisper_models=WHISPER_MODELS,
         tts_engines=TTS_ENGINES,
         qwen_speakers=QWEN_SPEAKERS,
+        defaults=studio_defaults(),
+        logged_in=admin_logged_in(),
     )
 
 
@@ -246,6 +267,7 @@ def api_scriptgen():
             topic, scenes=scenes, duration=duration, tone=tone,
             media_lang=media_lang,
             prompt_path=ADMIN_PACK_PROMPT, llm_path=ADMIN_LLM,
+            llm_overrides=eff_llm_overrides(), template_text=db_prompt("scene_pack"),
         )
     except scriptgen.ScriptGenError as e:
         return jsonify({"error": str(e)}), 502
@@ -279,6 +301,7 @@ def api_mediaprompts():
         prompts = scriptgen.generate_media_prompts(
             blocks, media_lang=media_lang,
             prompt_path=ADMIN_MEDIA_PROMPT, llm_path=ADMIN_LLM,
+            llm_overrides=eff_llm_overrides(), template_text=db_prompt("media_prompt"),
         )
     except scriptgen.ScriptGenError as e:
         return jsonify({"error": str(e)}), 502
@@ -309,6 +332,26 @@ def generate():
 
     script_path = base / "script.txt"
     script_path.write_text(script, encoding="utf-8")
+
+    # 작업 모드: final(전체 렌더) | preview(자막·영상·나레이션 합성 미리보기)
+    job_mode = request.form.get("job_mode") if request.form.get("job_mode") in ("final", "preview") else "final"
+
+    # 미리보기 해상도 (기본 540×960@24 — 빠른 확인용)
+    try:
+        pv = {
+            "width": max(180, min(1080, int(request.form.get("pv_width") or 540))),
+            "height": max(320, min(1920, int(request.form.get("pv_height") or 960))),
+            "fps": max(12, min(60, int(request.form.get("pv_fps") or 24))),
+        }
+    except (TypeError, ValueError):
+        pv = {"width": 540, "height": 960, "fps": 24}
+
+    # 미리보기 자막 폰트 업로드(선택)
+    subtitle_font_path = None
+    font_up = request.files.get("subtitle_font")
+    if font_up and font_up.filename and Path(font_up.filename).suffix.lower() in {".ttf", ".otf", ".ttc"}:
+        subtitle_font_path = base / ("subtitle_font" + Path(font_up.filename).suffix.lower())
+        font_up.save(subtitle_font_path)
 
     # 미디어 업로드 (번호가 있는 파일명은 그 번호 우선, 아니면 도착 순서)
     saved = 0
@@ -362,7 +405,7 @@ def generate():
         "stage_label": None,
         "progress": 0,
         "log": ["[웹] 작업이 접수되었습니다. 대기열에서 기다리는 중…"],
-        "outputs": {"video": False, "srt": False},
+        "outputs": {"video": False, "srt": False, "preview": False},
         "error": None,
         "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "script_text": script,
@@ -384,6 +427,11 @@ def generate():
         "no_overlay": request.form.get("no_overlay") == "1",
         "no_duck": request.form.get("no_duck") == "1",
         "loudnorm": request.form.get("loudnorm") == "1",
+        "mode": job_mode,
+        "width": pv["width"] if job_mode == "preview" else 1080,
+        "height": pv["height"] if job_mode == "preview" else 1920,
+        "fps": pv["fps"] if job_mode == "preview" else 30,
+        "subtitle_font": subtitle_font_path,
     }
     JOBS[job_id] = job
     JOB_Q.put(job_id)
@@ -415,6 +463,7 @@ def download(job_id: str, kind: str):
         return jsonify({"error": "작업을 찾을 수 없습니다."}), 404
     targets = {
         "video": (job["out_dir"] / "final.mp4", f"shorts_{job_id[:8]}.mp4"),
+        "preview": (job["out_dir"] / "preview.mp4", f"preview_{job_id[:8]}.mp4"),
         "srt": (job["out_dir"] / "subtitles.srt", f"shorts_{job_id[:8]}.srt"),
     }
     if kind not in targets:
@@ -422,12 +471,209 @@ def download(job_id: str, kind: str):
     path, dname = targets[kind]
     if not path.exists():
         return jsonify({"error": "아직 결과물이 없습니다."}), 404
+    if kind == "preview":  # 인라인 재생(범위 요청 지원) — 미리보기 플레이어용
+        return send_file(path, mimetype="video/mp4", as_attachment=False, conditional=True)
     return send_file(path, as_attachment=True, download_name=dname)
 
 
 # ── 엔트리포인트 ──────────────────────────────────────
 
 ensure_worker()
+
+# ── SQLite 설정 스토어 + 관리자 인증 ─────────────────────
+# data/settings.db: 스튜디오 설정/LLM 연결/프롬프트 템플릿/관리자 계정
+SETTINGS_DB_PATH = DATA_DIR / "settings.db"
+
+app.secret_key = settings_db.get_or_create_secret(SETTINGS_DB_PATH)
+
+
+def db_get(key: str, default=None):
+    return settings_db.get(SETTINGS_DB_PATH, key, default)
+
+
+def eff_llm_overrides() -> dict:
+    """관리자 DB 'llm.*' → LLM 연결 오버라이드 (파일 llm.json 위에 얹음)."""
+    return settings_db.get_section(SETTINGS_DB_PATH, "llm")
+
+
+def db_prompt(kind: str) -> str | None:
+    """DB에 저장된 프롬프트 템플릿 (비어 있으면 파일 사용)."""
+    v = db_get(f"prompt.{kind}")
+    return v if isinstance(v, str) and v.strip() else None
+
+
+def studio_defaults() -> dict:
+    """메인 폼의 기본값 (관리자가 DB로 바꾸면 여기서 주입)."""
+    return settings_db.get_section(SETTINGS_DB_PATH, "studio")
+
+
+def require_login_enabled() -> bool:
+    return bool(db_get("auth.require_login", False))
+
+
+def admin_logged_in() -> bool:
+    return bool(session.get("admin"))
+
+
+def admin_required(view):
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not admin_logged_in():
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "관리자 로그인이 필요합니다."}), 401
+            return redirect(url_for("admin_login", next=request.path))
+        return view(*args, **kwargs)
+    wrapper.__name__ = view.__name__
+    return wrapper
+
+
+_PUBLIC_PATHS = ("/admin/login", "/static", "/favicon")
+
+
+@app.before_request
+def auth_guard():
+    """require_login=1이면 관리자 로그인 없이는 아무것도 못 열어봄."""
+    if admin_logged_in():
+        return None
+    if any(request.path.startswith(p) for p in _PUBLIC_PATHS):
+        return None
+    if require_login_enabled():
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "로그인이 필요합니다. 관리자 로그인 후 이용하세요."}), 401
+        return redirect(url_for("admin_login", next=request.path))
+    return None
+
+
+# ── 관리자 라우트 ─────────────────────────────────────
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    need_setup = settings_db.admin_count(SETTINGS_DB_PATH) == 0
+    error = None
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+        password2 = request.form.get("password2") or ""
+        try:
+            if need_setup or request.form.get("mode") == "setup":
+                if password != password2:
+                    raise ValueError("비밀번호 확인이 일치하지 않습니다.")
+                settings_db.create_admin(SETTINGS_DB_PATH, username, password)
+                session["admin"] = username
+                return redirect(safe_next(request.form.get("next")) or url_for("admin_page"))
+            if settings_db.verify_admin(SETTINGS_DB_PATH, username, password):
+                session["admin"] = username
+                return redirect(safe_next(request.form.get("next")) or url_for("admin_page"))
+            error = "사용자 이름 또는 비밀번호가 올바르지 않습니다."
+        except ValueError as e:
+            error = str(e)
+    return render_template(
+        "login.html", need_setup=need_setup, error=error,
+        next=request.values.get("next", ""),
+    )
+
+
+def safe_next(target: str | None) -> str | None:
+    """오픈 리디렉션 방지: 같은 사이트 상대 경로만 허용."""
+    if target and target.startswith("/") and not target.startswith("//"):
+        return target
+    return None
+
+
+@app.get("/admin/logout")
+def admin_logout():
+    session.pop("admin", None)
+    return redirect(url_for("index") if not require_login_enabled() else url_for("admin_login"))
+
+
+@app.get("/admin")
+@admin_required
+def admin_page():
+    llm_cfg = {
+        "provider": db_get("llm.provider", ""),
+        "model": db_get("llm.model", ""),
+        "base_url": db_get("llm.base_url", ""),
+        "api_key_env": db_get("llm.api_key_env", ""),
+        "temperature": db_get("llm.temperature", ""),
+        "max_tokens": db_get("llm.max_tokens", ""),
+    }
+    prompts = {
+        "scene_pack": db_prompt("scene_pack") or ADMIN_PACK_PROMPT.read_text(encoding="utf-8"),
+        "media_prompt": db_prompt("media_prompt") or ADMIN_MEDIA_PROMPT.read_text(encoding="utf-8"),
+        "script": db_prompt("script") or (ADMIN_PROMPT.read_text(encoding="utf-8") if ADMIN_PROMPT.exists() else ""),
+    }
+    prompts_from_db = {k: bool(db_prompt(k)) for k in ("scene_pack", "media_prompt", "script")}
+    return render_template(
+        "admin.html",
+        admin=session.get("admin"),
+        db_path=str(SETTINGS_DB_PATH.relative_to(ROOT)),
+        llm_cfg=llm_cfg,
+        llm_touched=bool(eff_llm_overrides()),
+        prompts=prompts,
+        prompts_from_db=prompts_from_db,
+        studio=studio_defaults(),
+        require_login=require_login_enabled(),
+        tts_engines=TTS_ENGINES,
+        voices=VOICES,
+        rates=RATES,
+        qwen_speakers=QWEN_SPEAKERS,
+        whisper_models=WHISPER_MODELS,
+    )
+
+
+@app.post("/admin/settings")
+@admin_required
+def admin_settings_save():
+    """관리자 대시보드 폼 저장. 빈 값 = 키 삭제(파일/코드 기본값으로 회귀)."""
+    form = request.form
+    for key in ("provider", "model", "base_url", "api_key_env", "temperature", "max_tokens"):
+        v = (form.get(f"llm_{key}") or "").strip()
+        if v:
+            if key == "temperature":
+                v = float(v)
+            elif key == "max_tokens":
+                v = int(v)
+            settings_db.set(SETTINGS_DB_PATH, f"llm.{key}", v)
+        else:
+            settings_db.delete(SETTINGS_DB_PATH, f"llm.{key}")
+
+    for kind in ("scene_pack", "media_prompt", "script"):
+        v = (form.get(f"prompt_{kind}") or "").strip()
+        if v:
+            settings_db.set(SETTINGS_DB_PATH, f"prompt.{kind}", v)
+        else:
+            settings_db.delete(SETTINGS_DB_PATH, f"prompt.{kind}")
+
+    STUDIO_KEYS = ("voice", "rate", "tts_backend", "qwen_speaker", "qwen_instruct",
+                   "watermark", "padding", "whisper_model", "width", "height", "fps")
+    for key in STUDIO_KEYS:
+        v = (form.get(f"studio_{key}") or "").strip()
+        if v:
+            if key == "padding":
+                v = float(v)
+            elif key in ("width", "height", "fps"):
+                v = int(v)
+            settings_db.set(SETTINGS_DB_PATH, f"studio.{key}", v)
+        else:
+            settings_db.delete(SETTINGS_DB_PATH, f"studio.{key}")
+
+    settings_db.set(SETTINGS_DB_PATH, "auth.require_login", form.get("require_login") == "1")
+    return redirect(url_for("admin_page", saved="1"))
+
+
+@app.post("/admin/password")
+@admin_required
+def admin_password_change():
+    current = request.form.get("current") or ""
+    new = request.form.get("new") or ""
+    user = session.get("admin")
+    if not settings_db.verify_admin(SETTINGS_DB_PATH, user, current):
+        return redirect(url_for("admin_page", err="현재 비밀번호가 올바르지 않습니다."))
+    try:
+        settings_db.change_password(SETTINGS_DB_PATH, user, new)
+    except ValueError as e:
+        return redirect(url_for("admin_page", err=str(e)))
+    return redirect(url_for("admin_page", saved="1"))
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="반자동 쇼츠 조립 시스템 웹 UI")
