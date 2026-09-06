@@ -94,10 +94,18 @@
           <option value="doc">유튜브 다큐 · 3~5분</option>
         </select>
       </div>
+      <div style="min-width:84px">
+        <label for="genScenes" style="margin-top:0">씬 수</label>
+        <input type="number" id="genScenes" value="4" min="2" max="10" style="padding:11px 12px">
+      </div>
+      <div style="min-width:120px">
+        <label for="genDuration" style="margin-top:0">상영 시간(초)</label>
+        <input type="number" id="genDuration" value="30" min="30" max="1800" step="10" style="padding:11px 12px">
+      </div>
       <button class="btn" id="genScriptBtn" type="button" style="padding:11px 18px;white-space:nowrap">✨ 대본 생성</button>
       <button class="btn" id="mediaPromptBtn" type="button" style="padding:11px 18px;white-space:nowrap;background:linear-gradient(135deg,#7b5cff,#5636d6)">🖼️ 미디어 프롬프트</button>
     </div>
-    <div id="genScriptMsg" class="hint" style="margin:6px 0 4px">✨ 대본 생성: 주제 → 대본+미디어 프롬프트 · 🖼️ 미디어 프롬프트: 아래 대본(직접 입력/외부 AI) → 씬별 이미지·영상 프롬프트 · 템플릿: <code>admin/*_prompt.txt</code></div>
+    <div id="genScriptMsg" class="hint" style="margin:6px 0 4px">✨ 대본 생성: 주제 → 대본+미디어 프롬프트 · 🖼️ 미디어 프롬프트: 아래 대본(직접 입력/외부 AI) → 씬별 이미지·영상 프롬프트 · 템플릿: <code>admin/*_prompt.txt</code> · ⏱ 상영 시간 30~1800초 (쇼츠 30~90 / 다큐 180~600 권장)</div>
 
     <label for="script">📝 대본 (빈 줄로 씬 구분 = 미디어 1개)</label>
     <textarea id="script" name="script" placeholder="커피 한 잔이 당신의 하루를 바꾼다면 믿으시겠습니까?
@@ -343,7 +351,9 @@ genScriptBtn.addEventListener('click', async () => {
     const r = await fetch('/api/scriptgen', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({topic, style, scenes: 4, duration: 30}),
+      body: JSON.stringify({topic, style,
+        scenes: Math.min(10, Math.max(2, +document.getElementById('genScenes').value || 4)),
+        duration: Math.min(1800, Math.max(30, +document.getElementById('genDuration').value || 30))}),
     });
     const d = await r.json();
     if (!r.ok) { genScriptMsg.textContent = '❌ ' + (d.error || '대본 생성 실패'); return; }
@@ -475,6 +485,15 @@ async function refreshJobs() {
     });
   } catch (e) {}
 }
+// 스타일 전환 시 대표 상영 시간 제안 (사용자가 직접 고친 값이면 유지)
+const genDurEl = document.getElementById('genDuration');
+let durTouched = false;
+genDurEl.addEventListener('input', () => { durTouched = true; });
+document.getElementById('genStyle').addEventListener('change', (e) => {
+  if (durTouched) return;
+  genDurEl.value = e.target.value === 'doc' ? 240 : 30;
+});
+
 refreshJobs();
 setInterval(refreshJobs, 8000);
 </script>

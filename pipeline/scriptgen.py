@@ -27,6 +27,25 @@ DEFAULTS = {
     "max_tokens": 1200,
 }
 
+def duration_guidance(duration: int) -> str:
+    """목표 상영 시간(초)을 LLM이 실천할 수 있게 분량 지시문으로 번역.
+
+    한국어 낭독은 대략 초당 4~5자 — 씬 분할 기준과 함께 명시해 재현성 높인다.
+    """
+    d = int(duration)
+    mm, ss = divmod(d, 60)
+    lo = round(d * 4.0 / 10) * 10
+    hi = round(d * 5.0 / 10) * 10
+    found = f"이번 영상의 목표 상영 시간은 {d}초"
+    if mm:
+        found += f"(약 {mm}분 {ss}초)" if ss else f"(약 {mm}분)"
+    return (
+        "[목표 상영 시간]\n" + found + "입니다. "
+        f"한국어 낭독 기준으로 전체 대본을 약 {lo}~{hi}자에 맞추고, "
+        "각 단계(씬)의 분량도 비슷한 길이로 균등하게 나눠 주세요."
+    )
+
+
 PLACEHOLDERS = ("topic", "scene_count", "duration", "tone", "media_lang", "scenes")
 
 
@@ -214,11 +233,14 @@ def generate_script(
     llm_path: Path | str | None = None,
     llm_overrides: dict | None = None,
     template_text: str | None = None,
+    prompt_suffix: str | None = None,
 ) -> str:
     if not topic.strip():
         raise ScriptGenError("주제가 비어 있습니다.")
     cfg = _effective_llm_config(llm_path, llm_overrides)
     template = _effective_template(prompt_path, template_text)
+    if prompt_suffix and prompt_suffix.strip():
+        template = template.rstrip() + "\n\n" + prompt_suffix.strip()
     prompt = build_prompt(template, topic=topic, scenes=scenes, duration=duration, tone=tone)
     log(f"  LLM 호출: provider={cfg.get('provider')} model={cfg.get('model')} (주제: {topic})")
     raw = call_llm(prompt, cfg)

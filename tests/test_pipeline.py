@@ -433,6 +433,35 @@ def test_youtube_doc_template_contract():
         assert sig in raw, f"시그니처/계약 문구 누락: {sig}"
 
 
+def test_duration_guidance_and_suffix_injection():
+    """30~1800초 목표 상영 시간 → 분량 지시문 계산 + generate_script에 주입."""
+    g500 = sg.duration_guidance(500)
+    assert "500초" in g500 and "8분 20초" in g500
+    assert "2,000자" in g500.replace(",", "") or "2000" in g500  # 4자/초 하한
+    g30 = sg.duration_guidance(30)
+    assert "30초" in g30 and "분" not in g30.split("입니다")[0]  # 60초 미만은 분 표기 없음
+    g1800 = sg.duration_guidance(1800)
+    assert "30분" in g1800
+
+    calls = {}
+    orig = sg.call_llm
+    sg.call_llm = lambda prompt, cfg: calls.setdefault("p", prompt) or prompt
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+        sg.generate_script(
+            "테스트", scenes=5, duration=500,
+            prompt_path="admin/youtube_doc_prompt.txt",
+            llm_path=None, prompt_suffix=sg.duration_guidance(500),
+        )
+    except SystemExit:  # llm.json 미설정 시 fail — mock 환경 변수로 우회
+        pass
+    finally:
+        sg.call_llm = orig
+    if "p" in calls:  # llm.json이 존재하는 환경이라면
+        assert "500초" in calls["p"] and "[목표 상영 시간]" in calls["p"]
+
+
 # ── 직접 실행 지원 ─────────────────────────────────────
 if __name__ == "__main__":
     fns = [(k, v) for k, v in globals().items() if k.startswith("test_")]

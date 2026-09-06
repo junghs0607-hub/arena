@@ -265,18 +265,21 @@ def api_scriptgen():
     style = (data.get("style") or "pack").strip()
     try:
         scenes = max(2, min(10, int(data.get("scenes") or 4)))
-        duration = max(10, min(120, int(data.get("duration") or 30)))
+        duration = int(data.get("duration") or (240 if (data.get("style") == "doc") else 30))
     except (TypeError, ValueError):
-        scenes, duration = 4, 30
+        scenes, duration = (4, 30)
+    # 전 스타일 공통: 목표 상영 시간 30~1800초
+    duration = max(30, min(1800, duration))
     tone = (data.get("tone") or "정보 전달·실용 꿀팁").strip()
     media_lang = (data.get("media_lang") or "English").strip()
 
     if style == "doc":
         try:
             text = scriptgen.generate_script(
-                topic, scenes=5, duration=240, tone=tone,
+                topic, scenes=5, duration=duration, tone=tone,
                 prompt_path=ADMIN_DOC_PROMPT, llm_path=ADMIN_LLM,
                 llm_overrides=eff_llm_overrides(), template_text=db_prompt("youtube_doc"),
+                prompt_suffix=scriptgen.duration_guidance(duration),
             )
         except scriptgen.ScriptGenError as e:
             return jsonify({"error": str(e)}), 502
@@ -284,6 +287,7 @@ def api_scriptgen():
             return jsonify({"error": f"다큐 대본 생성 실패: {e}"}), 500
         n = len([b for b in re.split(r"\n\s*\n", text) if b.strip()])
         return jsonify({"script": text, "scenes": n, "style": "doc",
+                        "duration": duration,
                         "media_prompts": [], "prompts_text": ""})
 
     media_lang = (data.get("media_lang") or "English").strip()
@@ -302,6 +306,8 @@ def api_scriptgen():
     return jsonify({
         "script": pack.to_script(),
         "scenes": len(pack.scenes),
+        "scenes_requested": scenes,
+        "duration": duration,
         "media_prompts": [sc.to_dict() for sc in pack.scenes],
         "prompts_text": pack.to_prompts_text(),
     })

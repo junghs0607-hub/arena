@@ -41,12 +41,14 @@ def stage_scriptgen(args: argparse.Namespace) -> None:
     if not args.topic:
         fail("`--topic \"주제\"`를 입력하세요.")
 
-    if args.style == "doc":  # 유튜브 공학 다큐(3~5분, 5단계=5씬, 낭독 전용)
+    if args.style == "doc":  # 유튜브 공학 다큐(목표 상영 시간 지정 가능, 5단계=5씬, 낭독 전용)
         try:
+            dur = args.duration if args.duration else 240
             text = sg.generate_script(
-                args.topic, scenes=5, duration=240, tone=args.tone,
+                args.topic, scenes=5, duration=dur, tone=args.tone,
                 prompt_path="admin/youtube_doc_prompt.txt",
                 llm_path=args.llm_config,
+                prompt_suffix=sg.duration_guidance(dur),
             )
         except sg.ScriptGenError as e:
             fail(str(e))
@@ -279,7 +281,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--style", default="pack", choices=["pack", "doc"],
                    help="pack: 씬 팩(쇼츠 대본+미디어 프롬프트) / doc: 유튜브 공학 다큐 3~5분(낭독 전용)")
     p.add_argument("--scenes", type=int, default=4, help="씬 개수")
-    p.add_argument("--duration", type=int, default=30, help="목표 낭독 초")
+    p.add_argument("--duration", type=int, default=30, help="목표 상영 시간(초). 30~1800초 권장")
     p.add_argument("--tone", default="정보 전달·실용 꿀팁", help="톤/장르 지시")
     p.add_argument("--prompt-file", default="admin/script_prompt.txt", help="관리자 프롬프트 템플릿(대본 전용 레거시)")
     p.add_argument("--pack-prompt-file", default="admin/scene_pack_prompt.txt", help="씬 팩(대본+시각프롬프트) 템플릿")
