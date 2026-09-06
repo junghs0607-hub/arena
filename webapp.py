@@ -36,7 +36,14 @@ DATA_DIR = ROOT / "data"
 ADMIN_PROMPT = ROOT / "admin" / "script_prompt.txt"
 ADMIN_PACK_PROMPT = ROOT / "admin" / "scene_pack_prompt.txt"
 ADMIN_MEDIA_PROMPT = ROOT / "admin" / "media_prompt.txt"
+ADMIN_DOC_PROMPT = ROOT / "admin" / "youtube_doc_prompt.txt"
 ADMIN_LLM = ROOT / "admin" / "llm.json"
+PROMPT_FILES = {
+    "scene_pack": ADMIN_PACK_PROMPT,
+    "media_prompt": ADMIN_MEDIA_PROMPT,
+    "script": ADMIN_PROMPT,
+    "youtube_doc": ADMIN_DOC_PROMPT,
+}
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 VID_EXTS = {".mp4", ".mov", ".webm", ".mkv", ".avi"}
@@ -245,21 +252,39 @@ def index():
 
 @app.post("/api/scriptgen")
 def api_scriptgen():
-    """주제 → 관리자 프롬프트(admin/script_prompt.txt) → AI 대본.
+    """주제 → 관리자 프롬프트 → AI 대본.
 
-    LLM 호출(수십 초)이므로 동기로 기다리되, 길어지는 대형 작업은
-    /api/generate 작업 큐와 분리해 UI가 멀티태스킹된다.
+    style:
+      * pack (기본): 씬 팩 — 쇼츠 대본 + 씬별 이미지/동영상 프롬프트
+      * doc        : 유튜브 공학 다큐 3~5분 — 낭독 대본만(5단계=5씬)
     """
     data = request.get_json(silent=True) or request.form
     topic = (data.get("topic") or "").strip()
     if not topic:
         return jsonify({"error": "주제를 입력하세요."}), 400
+    style = (data.get("style") or "pack").strip()
     try:
         scenes = max(2, min(10, int(data.get("scenes") or 4)))
         duration = max(10, min(120, int(data.get("duration") or 30)))
     except (TypeError, ValueError):
         scenes, duration = 4, 30
     tone = (data.get("tone") or "정보 전달·실용 꿀팁").strip()
+    media_lang = (data.get("media_lang") or "English").strip()
+
+    if style == "doc":
+        try:
+            text = scriptgen.generate_script(
+                topic, scenes=5, duration=240, tone=tone,
+                prompt_path=ADMIN_DOC_PROMPT, llm_path=ADMIN_LLM,
+                llm_overrides=eff_llm_overrides(), template_text=db_prompt("youtube_doc"),
+            )
+        except scriptgen.ScriptGenError as e:
+            return jsonify({"error": str(e)}), 502
+        except Exception as e:  # noqa: BLE001
+            return jsonify({"error": f"다큐 대본 생성 실패: {e}"}), 500
+        n = len([b for b in re.split(r"\n\s*\n", text) if b.strip()])
+        return jsonify({"script": text, "scenes": n, "style": "doc",
+                        "media_prompts": [], "prompts_text": ""})
 
     media_lang = (data.get("media_lang") or "English").strip()
     try:
@@ -598,11 +623,10 @@ def admin_page():
         "max_tokens": db_get("llm.max_tokens", ""),
     }
     prompts = {
-        "scene_pack": db_prompt("scene_pack") or ADMIN_PACK_PROMPT.read_text(encoding="utf-8"),
-        "media_prompt": db_prompt("media_prompt") or ADMIN_MEDIA_PROMPT.read_text(encoding="utf-8"),
-        "script": db_prompt("script") or (ADMIN_PROMPT.read_text(encoding="utf-8") if ADMIN_PROMPT.exists() else ""),
+        k: (db_prompt(k) or (f.read_text(encoding="utf-8") if f.exists() else ""))
+        for k, f in PROMPT_FILES.items()
     }
-    prompts_from_db = {k: bool(db_prompt(k)) for k in ("scene_pack", "media_prompt", "script")}
+    prompts_from_db = {k: bool(db_prompt(k)) for k in PROMPT_FILES}
     return render_template(
         "admin.html",
         admin=session.get("admin"),
@@ -637,7 +661,7 @@ def admin_settings_save():
         else:
             settings_db.delete(SETTINGS_DB_PATH, f"llm.{key}")
 
-    for kind in ("scene_pack", "media_prompt", "script"):
+    for kind in PROMPT_FILES:
         v = (form.get(f"prompt_{kind}") or "").strip()
         if v:
             settings_db.set(SETTINGS_DB_PATH, f"prompt.{kind}", v)

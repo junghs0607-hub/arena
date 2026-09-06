@@ -131,7 +131,7 @@ def _mock_answer(prompt: str) -> str:
     - image_prompt 키 계약 → 씬 팩(JSON {"scenes": [...]})
     - 그 외 → 대본 텍스트(빈 줄 구분)
     """
-    m = re.search(r"주제:\s*(.+)", prompt)
+    m = re.search(r"주제:\s*(.+)", prompt) or re.search(r"영상 주제\]\s*\n(.+)", prompt)
     topic = (m.group(1).strip() if m else "이 주제")[:30]
     sc = re.search(r"씬\s*(\d+)\s*개", prompt)
     wants_media = "image_prompt" in prompt or "video_prompt" in prompt
@@ -212,11 +212,13 @@ def generate_script(
     tone: str = "정보 전달·실용 꿀팁",
     prompt_path: Path | str,
     llm_path: Path | str | None = None,
+    llm_overrides: dict | None = None,
+    template_text: str | None = None,
 ) -> str:
     if not topic.strip():
         raise ScriptGenError("주제가 비어 있습니다.")
-    cfg = load_llm_config(llm_path)
-    template = load_prompt_template(prompt_path)
+    cfg = _effective_llm_config(llm_path, llm_overrides)
+    template = _effective_template(prompt_path, template_text)
     prompt = build_prompt(template, topic=topic, scenes=scenes, duration=duration, tone=tone)
     log(f"  LLM 호출: provider={cfg.get('provider')} model={cfg.get('model')} (주제: {topic})")
     raw = call_llm(prompt, cfg)

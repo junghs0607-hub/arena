@@ -37,9 +37,28 @@ from pipeline import scriptgen as sg
 # ── AI 대본 생성 (관리자 프롬프트 + 주제) ────────────────
 
 def stage_scriptgen(args: argparse.Namespace) -> None:
-    """주제 → 씬 팩(대본 + 이미지/동영상 프롬프트) 생성."""
+    """주제 → 씬 팩(대본 + 이미지/동영상 프롬프트) 또는 다큐 대본 생성."""
     if not args.topic:
         fail("`--topic \"주제\"`를 입력하세요.")
+
+    if args.style == "doc":  # 유튜브 공학 다큐(3~5분, 5단계=5씬, 낭독 전용)
+        try:
+            text = sg.generate_script(
+                args.topic, scenes=5, duration=240, tone=args.tone,
+                prompt_path="admin/youtube_doc_prompt.txt",
+                llm_path=args.llm_config,
+            )
+        except sg.ScriptGenError as e:
+            fail(str(e))
+            return
+        sg.save_script(text, args.script)
+        print("\n──────── 다큐 대본 미리보기 ────────")
+        print(text)
+        print("─────────────────────────────────────")
+        log("씬별 미디어가 필요하면: python build.py mediaprompts --script "
+            f"{args.script}")
+        return
+
     try:
         pack = sg.generate_scene_pack(
             args.topic,
@@ -257,6 +276,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--preview-crf", type=int, default=30, help="미리보기 화질 (작을수록 고화질, 28~35 권장)")
     # ── AI 대본 생성(scriptgen) ──
     p.add_argument("--topic", default=None, help="대본 주제 (scriptgen 전용)")
+    p.add_argument("--style", default="pack", choices=["pack", "doc"],
+                   help="pack: 씬 팩(쇼츠 대본+미디어 프롬프트) / doc: 유튜브 공학 다큐 3~5분(낭독 전용)")
     p.add_argument("--scenes", type=int, default=4, help="씬 개수")
     p.add_argument("--duration", type=int, default=30, help="목표 낭독 초")
     p.add_argument("--tone", default="정보 전달·실용 꿀팁", help="톤/장르 지시")

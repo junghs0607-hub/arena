@@ -99,6 +99,9 @@
     <label>대본 전용 (레거시)
       {% if prompts_from_db.script %}<span class="tag db">DB 버전 사용 중</span>{% else %}<span class="tag">파일: admin/script_prompt.txt</span>{% endif %}</label>
     <textarea name="prompt_script" style="min-height:120px">{{ prompts.script }}</textarea>
+    <label>🎬 유튜브 공학 다큐 3~5분 (스타일: youtube_doc — 낭독 전용, 5단계=5씬)
+      {% if prompts_from_db.youtube_doc %}<span class="tag db">DB 버전 사용 중</span>{% else %}<span class="tag">파일: admin/youtube_doc_prompt.txt</span>{% endif %}</label>
+    <textarea name="prompt_youtube_doc" style="min-height:220px">{{ prompts.youtube_doc }}</textarea>
     <div class="hint">저장 시점의 내용이 DB에 복사됩니다. 다시 파일 버전을 쓰려면 해당 칸을 비우고 저장하세요.</div>
   </div>
 

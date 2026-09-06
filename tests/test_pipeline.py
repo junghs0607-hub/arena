@@ -420,6 +420,19 @@ def test_preview_font_and_audio_graph_helpers():
     assert "sidechaincompress" in g2 and "volume=0.200" in g2
 
 
+def test_youtube_doc_template_contract():
+    """유튜브 다큐 템플릿: 치환/출력계약/시그니처 문구 유지 확인."""
+    tpl_path = Path("admin/youtube_doc_prompt.txt")
+    raw = tpl_path.read_text(encoding="utf-8")
+    filled = sg.build_prompt(raw, topic="잠수함의 비밀", scenes=5, duration=240, tone="다큐")
+    assert "{topic}" not in filled                    # 치환 완료
+    assert "잠수함의 비밀" in filled
+    assert "[영상 주제]" in raw
+    assert "[출력 형식" in raw                        # 파서 계약 섹션 존재
+    for sig in ("미치고 환장할 노릇입니다", "발상을 뒤집습니다", "경이롭지 않나요", "빈 줄"):
+        assert sig in raw, f"시그니처/계약 문구 누락: {sig}"
+
+
 # ── 직접 실행 지원 ─────────────────────────────────────
 if __name__ == "__main__":
     fns = [(k, v) for k, v in globals().items() if k.startswith("test_")]

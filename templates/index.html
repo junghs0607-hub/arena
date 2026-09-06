@@ -87,6 +87,13 @@
         <label for="topic" style="margin-top:0">✨ AI 대본 생성 — 주제만 입력</label>
         <input type="text" id="topic" placeholder="예: 카페인의 과학, 아침 운동의 효과, 2026 재테크 트렌드">
       </div>
+      <div style="min-width:200px">
+        <label for="genStyle" style="margin-top:0">스타일</label>
+        <select id="genStyle" style="padding:11px 12px">
+          <option value="pack">쇼츠 · 씬 팩 (대본+미디어)</option>
+          <option value="doc">유튜브 다큐 · 3~5분</option>
+        </select>
+      </div>
       <button class="btn" id="genScriptBtn" type="button" style="padding:11px 18px;white-space:nowrap">✨ 대본 생성</button>
       <button class="btn" id="mediaPromptBtn" type="button" style="padding:11px 18px;white-space:nowrap;background:linear-gradient(135deg,#7b5cff,#5636d6)">🖼️ 미디어 프롬프트</button>
     </div>
@@ -327,20 +334,25 @@ function watch(jobId) {
 genScriptBtn.addEventListener('click', async () => {
   const topic = document.getElementById('topic').value.trim();
   if (!topic) { genScriptMsg.textContent = '주제를 먼저 입력하세요.'; return; }
+  const style = document.getElementById('genStyle').value;
   genScriptBtn.disabled = true;
-  genScriptMsg.textContent = '⏳ AI가 대본을 쓰는 중… (보통 10~40초)';
+  genScriptMsg.textContent = style === 'doc'
+    ? '⏳ AI가 5단계 다큐 대본을 쓰는 중… (보통 20~60초)'
+    : '⏳ AI가 대본을 쓰는 중… (보통 10~40초)';
   try {
     const r = await fetch('/api/scriptgen', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({topic, scenes: 4, duration: 30}),
+      body: JSON.stringify({topic, style, scenes: 4, duration: 30}),
     });
     const d = await r.json();
     if (!r.ok) { genScriptMsg.textContent = '❌ ' + (d.error || '대본 생성 실패'); return; }
     document.getElementById('script').value = d.script;
     const hasPrompts = (d.media_prompts || []).some(s => s.image_prompt || s.video_prompt);
     genScriptMsg.textContent = `✅ 대본 ${d.scenes}씬 생성 완료` +
-      (hasPrompts ? ' — 미디어 프롬프트도 아래에 준비됐습니다.' : ' — 검토·수정 후 미디어를 올리세요.');
+      (style === 'doc'
+        ? ' — 5단계 낭독 대본입니다. 🖼️ 버튼으로 미디어 프롬프트도 만들 수 있어요.'
+        : hasPrompts ? ' — 미디어 프롬프트도 아래에 준비됐습니다.' : ' — 검토·수정 후 미디어를 올리세요.');
     renderMediaPrompts(d.media_prompts || [], d.prompts_text || '');
   } catch (e) {
     genScriptMsg.textContent = '❌ 네트워크 오류: ' + e;

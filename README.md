@@ -103,6 +103,7 @@ python webapp.py --host 0.0.0.0 --port 5000
 | `admin/scene_pack_prompt.txt` | ⭐ 씬 팩 프롬프트 — 주제 → 대본+씬별 이미지/동영상 프롬프트(JSON 계약). 키 이름(`scenes/narration/image_prompt/video_prompt`)은 파서가 찾는 이름이니 바꾸지 마세요 |
 | `admin/media_prompt.txt` | ⭐ 완성된 대본 → 씬별 미디어 프롬프트만(JSON 배열 계약). `image_prompt`/`video_prompt` 키 고정 |
 | `admin/script_prompt.txt` | 대본 전용 레거시 템플릿(기존 호환) — 치환 변수: `{topic}` `{scene_count}` `{duration}` `{tone}` (`{media_lang}` `{scenes}`도 사용 가능) |
+| `admin/youtube_doc_prompt.txt` | ⭐ 유튜브 공학 다큐 3~5분(낭독 전용, 5단계=5씬) — 숫자 한글 표기·지문 금지·시그니처 문구(“환장할 노릇/발상의 전환/정말 경이롭지 않나요”). 스타일 선택에서 `doc` 지정 시 사용 |
 | `admin/llm.json` | LLM 연결 설정. `admin/llm.local.json`(git 미추적)이 있으면 우선 |
 
 **LLM 설정 (`admin/llm.json`)**
@@ -315,6 +316,7 @@ assets/narration/scene_01.mp3
 │   ├── scene_pack_prompt.txt# ★ 씬 팩(대본+미디어 프롬프트) 템플릿
 │   ├── media_prompt.txt     # ★ 완성 대본 → 미디어 프롬프트 템플릿
 │   ├── script_prompt.txt    # (레거시) 대본 전용 템플릿
+│   ├── youtube_doc_prompt.txt# ★ 유튜브 공학 다큐(3~5분) 템플릿
 │   └── llm.json             # LLM 연결 설정 (로컬: llm.local.json)
 ├── data/
 │   └── settings.db          # ★ SQLite 설정 스토어 (관리자 계정/기본값/템플릿, git 무시)
